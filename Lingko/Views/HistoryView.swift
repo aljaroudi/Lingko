@@ -21,7 +21,6 @@ struct HistoryView: View {
     @State private var showFavoritesOnly = false
     @State private var selectedTagFilter: Tag?
     @State private var showClearAllAlert = false
-    @State private var showTagEditor = false
     @State private var showTagManagement = false
     @State private var selectedTranslationForTagEdit: SavedTranslation?
     @State private var deletionTrigger = UUID()
@@ -88,10 +87,8 @@ struct HistoryView: View {
             } message: {
                 Text("Are you sure you want to delete all translation history? This action cannot be undone.")
             }
-            .sheet(isPresented: $showTagEditor) {
-                if let translation = selectedTranslationForTagEdit {
-                    TagEditorView(translation: translation)
-                }
+            .sheet(item: $selectedTranslationForTagEdit) { translation in
+                TagEditorView(translation: translation)
             }
             .sheet(isPresented: $showTagManagement) {
                 TagManagementView()
@@ -236,7 +233,6 @@ struct HistoryView: View {
                             },
                             onEditTags: {
                                 selectedTranslationForTagEdit = translation
-                                showTagEditor = true
                             }
                         )
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -340,14 +336,14 @@ private struct HistoryRow: View {
 
                         // Show translations
                         if let translations = translation.decodedTranslations {
-                            let displayCount = isExpanded ? translations.count : min(2, translations.count)
+                            let displayCount = isExpanded ? translations.count : min(3, translations.count)
 
                             ForEach(Array(translations.prefix(displayCount).enumerated()), id: \.offset) { _, trans in
                                 TranslationEntryView(entry: trans)
                             }
 
                             // Show more/less button if more than 2 translations
-                            if translations.count > 2 {
+                            if translations.count > 3 {
                                 Button(action: { isExpanded.toggle() }) {
                                     HStack(spacing: 4) {
                                         Text(isExpanded ? "Show less" : "Show \(translations.count - 2) more")

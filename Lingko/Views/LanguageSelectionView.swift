@@ -13,19 +13,14 @@ struct LanguageSelectionView: View {
     @State private var service = TranslationService()
     @State private var installedLanguages: Set<Locale.Language> = []
     @State private var isLoading = true
-    @State private var showOnlyInstalled = false
     @Environment(\.dismiss) private var dismiss
 
     private let minimumLanguageCount = 2
 
     /// Use curated list of supported languages
     private var availableLanguages: [LanguageInfo] {
-        let languages = showOnlyInstalled
-            ? SupportedLanguages.all.filter { installedLanguages.contains($0.language) }
-            : SupportedLanguages.all
-
         // Sort: installed first, then alphabetically
-        return languages.sorted { lang1, lang2 in
+        return SupportedLanguages.all.sorted { lang1, lang2 in
             let installed1 = installedLanguages.contains(lang1.language)
             let installed2 = installedLanguages.contains(lang2.language)
 
@@ -65,10 +60,6 @@ struct LanguageSelectionView: View {
                         }
 
                         Section {
-                            Toggle("Show only installed languages", isOn: $showOnlyInstalled)
-                        }
-
-                        Section {
                             ForEach(filteredLanguages) { languageInfo in
                                 let language = languageInfo.language
                                 let isSelected = selectedLanguages.contains(language)
@@ -92,18 +83,6 @@ struct LanguageSelectionView: View {
                                         Spacer()
 
                                         HStack(spacing: 12) {
-                                            // Installation status indicator
-                                            if installedLanguages.contains(language) {
-                                                Image(systemName: "checkmark.circle.fill")
-                                                    .foregroundStyle(.green)
-                                                    .font(.caption)
-                                            } else {
-                                                Image(systemName: "arrow.down.circle")
-                                                    .foregroundStyle(.orange)
-                                                    .font(.caption)
-                                            }
-
-                                            // Selection checkmark
                                             if isSelected {
                                                 Image(systemName: "checkmark")
                                                     .foregroundStyle(canDeselect ? .blue : .gray)
@@ -117,11 +96,7 @@ struct LanguageSelectionView: View {
                                 .opacity((isSelected && !canDeselect) ? 0.6 : 1.0)
                             }
                         } header: {
-                            if showOnlyInstalled {
-                                Text("Installed Languages (\(installedLanguages.count))")
-                            } else {
-                                Text("All Supported Languages (\(SupportedLanguages.all.count))")
-                            }
+                            Text("\(SupportedLanguages.all.count) languages")
                         } footer: {
                             if selectedLanguages.count == minimumLanguageCount {
                                 Text("You have the minimum number of languages selected. Add more to enable deselection.")
