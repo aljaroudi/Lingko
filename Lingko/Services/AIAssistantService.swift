@@ -434,4 +434,56 @@ struct AIAssistantService {
 
         return nil
     }
+
+    // MARK: - Tag Suggestions
+
+    /// Suggest relevant tags (categories) for a translation based on content
+    ///
+    /// - Parameter text: The source text to analyze
+    /// - Returns: Array of suggested tag names, or empty array if unavailable
+    func suggestTags(for text: String) async -> [String] {
+        logger.info("🤖 Suggesting tags for text: \(text.prefix(50))...")
+
+        guard isAvailable else {
+            logger.debug("AI not available, returning empty tag suggestions")
+            return []
+        }
+
+        if #available(iOS 26.0, *) {
+            do {
+                let session = LanguageModelSession(model: model)
+                let prompt = """
+                Analyze this text and suggest 1-3 relevant categories from this list:
+                Greetings, Travel, Dining, Shopping, Directions, Emergency, Numbers, Time & Date, Weather, General
+
+                Text: "\(text)"
+
+                Return only the category names, separated by commas, without explanation.
+                """
+
+                let response = try await session.respond(to: prompt)
+                let suggestions = response.content
+                    .split(separator: ",")
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+
+                logger.info("✅ Suggested \(suggestions.count) tags: \(suggestions.joined(separator: ", "))")
+                return Array(suggestions.prefix(3)) // Limit to 3 tags
+            } catch let error as LanguageModelSession.GenerationError {
+                switch error {
+                case .guardrailViolation:
+                    logger.info("ℹ️ Guardrail triggered for tag suggestions")
+                    return []
+                default:
+                    logger.error("❌ Failed to suggest tags: \(error.localizedDescription)")
+                    return []
+                }
+            } catch {
+                logger.error("❌ Failed to suggest tags: \(error.localizedDescription)")
+                return []
+            }
+        }
+
+        return []
+    }
 }

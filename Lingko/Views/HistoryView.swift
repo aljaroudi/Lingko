@@ -12,23 +12,42 @@ struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \SavedTranslation.timestamp, order: .reverse)
     private var allHistory: [SavedTranslation]
+    @Query(sort: [SortDescriptor(\Tag.sortOrder), SortDescriptor(\Tag.name)])
+    private var allTags: [Tag]
 
     @State private var historyService = HistoryService()
+    @State private var tagService = TagService()
     @State private var searchText = ""
     @State private var showFavoritesOnly = false
+    @State private var selectedTagFilter: Tag?
     @State private var showClearAllAlert = false
     @State private var showExportSheet = false
+    @State private var showTagEditor = false
+    @State private var showTagManagement = false
+    @State private var selectedTranslationForTagEdit: SavedTranslation?
 
     // Callback for loading translation
     var onLoadTranslation: ((String) -> Void)?
 
     var body: some View {
         NavigationStack {
-            Group {
-                if filteredHistory.isEmpty {
-                    emptyStateView
-                } else {
-                    historyList
+            VStack(spacing: 0) {
+                // Tag filter bar
+                if !allTags.isEmpty {
+                    tagFilterBar
+                        .padding(.vertical, 8)
+                        .background(Color(.systemGroupedBackground))
+                }
+
+                Divider()
+
+                // History list
+                Group {
+                    if filteredHistory.isEmpty {
+                        emptyStateView
+                    } else {
+                        historyList
+                    }
                 }
             }
             .navigationTitle("History")
@@ -38,6 +57,14 @@ struct HistoryView: View {
                     Menu {
                         Toggle(isOn: $showFavoritesOnly) {
                             Label("Favorites Only", systemImage: "star.fill")
+                        }
+
+                        Divider()
+
+                        Button {
+                            showTagManagement = true
+                        } label: {
+                            Label("Manage Tags", systemImage: "tag")
                         }
 
                         Divider()
@@ -72,6 +99,18 @@ struct HistoryView: View {
             .sheet(isPresented: $showExportSheet) {
                 ExportView(history: filteredHistory)
             }
+            .sheet(isPresented: $showTagEditor) {
+                if let translation = selectedTranslationForTagEdit {
+                    TagEditorView(translation: translation)
+                }
+            }
+            .sheet(isPresented: $showTagManagement) {
+                TagManagementView()
+            }
+            .onAppear {
+                // Initialize default tags if they don't exist
+                tagService.initializeDefaultTags(context: modelContext)
+            }
         }
     }
 
@@ -83,6 +122,13 @@ struct HistoryView: View {
         // Filter by favorites
         if showFavoritesOnly {
             results = results.filter { $0.isFavorite }
+        }
+
+        // Filter by selected tag
+        if let selectedTag = selectedTagFilter {
+            results = results.filter { translation in
+                translation.tags?.contains(where: { $0.id == selectedTag.id }) ?? false
+            }
         }
 
         // Filter by search text
@@ -150,6 +196,40 @@ struct HistoryView: View {
     // MARK: - Subviews
 
     @ViewBuilder
+    private var tagFilterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                // "All" chip to clear filter
+                TagFilterChip(
+                    isSelected: selectedTagFilter == nil,
+                    name: "All",
+                    icon: "circle.grid.2x2",
+                    color: nil
+                ) {
+                    selectedTagFilter = nil
+                }
+
+                // Tag chips
+                ForEach(allTags) { tag in
+                    TagFilterChip(
+                        isSelected: selectedTagFilter?.id == tag.id,
+                        name: tag.name,
+                        icon: tag.icon,
+                        color: tag.color
+                    ) {
+                        if selectedTagFilter?.id == tag.id {
+                            selectedTagFilter = nil
+                        } else {
+                            selectedTagFilter = tag
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal)
+        }
+    }
+
+    @ViewBuilder
     private var historyList: some View {
         List {
             ForEach(groupedHistory, id: \.0) { section, translations in
@@ -162,6 +242,10 @@ struct HistoryView: View {
                             },
                             onLoad: {
                                 onLoadTranslation?(translation.sourceText)
+                            },
+                            onEditTags: {
+                                selectedTranslationForTagEdit = translation
+                                showTagEditor = true
                             }
                         )
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -223,71 +307,111 @@ private struct HistoryRow: View {
     let translation: SavedTranslation
     let onToggleFavorite: () -> Void
     let onLoad: () -> Void
+    let onEditTags: () -> Void
 
     @State private var isExpanded = false
 
     var body: some View {
-        Button(action: onLoad) {
-            HStack(alignment: .top, spacing: 12) {
-                // Favorite button
-                Button(action: onToggleFavorite) {
-                    Image(systemName: translation.isFavorite ? "star.fill" : "star")
-                        .foregroundStyle(translation.isFavorite ? .yellow : .gray)
-                        .font(.title3)
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: onLoad) {
+                HStack(alignment: .top, spacing: 12) {
+                    // Favorite button
+                    Button(action: onToggleFavorite) {
+                        Image(systemName: translation.isFavorite ? "star.fill" : "star")
+                            .foregroundStyle(translation.isFavorite ? .yellow : .gray)
+                            .font(.title3)
+                    }
+                    .buttonStyle(.plain)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        // Header: source language and timestamp
+                        HStack(spacing: 6) {
+                            Text(translation.sourceLanguageName)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "arrow.right")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                            Text("\(translation.translationCount) languages")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text(translation.timestamp, style: .time)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+
+                        // Source text
+                        Text(translation.sourceText)
+                            .font(.body)
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+
+                        // Show translations
+                        if let translations = translation.decodedTranslations {
+                            let displayCount = isExpanded ? translations.count : min(2, translations.count)
+
+                            ForEach(Array(translations.prefix(displayCount).enumerated()), id: \.offset) { _, trans in
+                                TranslationEntryView(entry: trans)
+                            }
+
+                            // Show more/less button if more than 2 translations
+                            if translations.count > 2 {
+                                Button(action: { isExpanded.toggle() }) {
+                                    HStack(spacing: 4) {
+                                        Text(isExpanded ? "Show less" : "Show \(translations.count - 2) more")
+                                            .font(.caption)
+                                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                                            .font(.caption2)
+                                    }
+                                    .foregroundStyle(.blue)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            .buttonStyle(.plain)
+
+            // Tags section
+            if let tags = translation.tags, !tags.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(tags) { tag in
+                        TagChip(tag: tag)
+                    }
+
+                    Spacer()
+
+                    Button(action: onEditTags) {
+                        Image(systemName: "tag")
+                            .font(.caption)
+                            .foregroundStyle(.blue)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.leading, 52)
+                .padding(.trailing, 12)
+                .padding(.top, 4)
+                .padding(.bottom, 8)
+            } else {
+                // Show "Add tags" button if no tags
+                Button(action: onEditTags) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "tag")
+                            .font(.caption2)
+                        Text("Add tags")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    // Header: source language and timestamp
-                    HStack(spacing: 6) {
-                        Text(translation.sourceLanguageName)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Image(systemName: "arrow.right")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                        Text("\(translation.translationCount) languages")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text(translation.timestamp, style: .time)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-
-                    // Source text
-                    Text(translation.sourceText)
-                        .font(.body)
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-
-                    // Show translations
-                    if let translations = translation.decodedTranslations {
-                        let displayCount = isExpanded ? translations.count : min(2, translations.count)
-
-                        ForEach(Array(translations.prefix(displayCount).enumerated()), id: \.offset) { _, trans in
-                            TranslationEntryView(entry: trans)
-                        }
-
-                        // Show more/less button if more than 2 translations
-                        if translations.count > 2 {
-                            Button(action: { isExpanded.toggle() }) {
-                                HStack(spacing: 4) {
-                                    Text(isExpanded ? "Show less" : "Show \(translations.count - 2) more")
-                                        .font(.caption)
-                                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                                        .font(.caption2)
-                                }
-                                .foregroundStyle(.blue)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
+                .padding(.leading, 52)
+                .padding(.top, 4)
+                .padding(.bottom, 8)
             }
-            .padding(.vertical, 4)
         }
-        .buttonStyle(.plain)
     }
 }
 
@@ -521,6 +645,67 @@ private struct ExportView: View {
             return "\"\(text.replacingOccurrences(of: "\"", with: "\"\""))\""
         }
         return text
+    }
+}
+
+// MARK: - Tag Chip Components
+
+private struct TagChip: View {
+    let tag: Tag
+
+    var chipColor: Color {
+        if let hex = tag.color {
+            return Color(hex: hex) ?? .blue
+        }
+        return .blue
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: tag.icon)
+                .font(.caption2)
+            Text(tag.name)
+                .font(.caption)
+                .fontWeight(.medium)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(chipColor.opacity(0.15))
+        .foregroundStyle(chipColor)
+        .clipShape(Capsule())
+    }
+}
+
+private struct TagFilterChip: View {
+    let isSelected: Bool
+    let name: String
+    let icon: String
+    let color: String?
+    let action: () -> Void
+
+    var chipColor: Color {
+        if let hex = color {
+            return Color(hex: hex) ?? .blue
+        }
+        return .blue
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.caption2)
+                Text(name)
+                    .font(.caption)
+                    .fontWeight(.medium)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(isSelected ? chipColor : Color(.systemGray5))
+            .foregroundStyle(isSelected ? .white : .primary)
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 
