@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 struct TranslationResult: Identifiable, Sendable {
     let id: UUID
@@ -15,13 +16,25 @@ struct TranslationResult: Identifiable, Sendable {
     let detectionConfidence: Double
     let timestamp: Date
 
+    // Romanization
+    var romanization: String?
+    var sourceRomanization: String?
+    var romanizationSystem: RomanizationSystem?
+
+    // Linguistic analysis
+    var linguisticAnalysis: LinguisticAnalysis?
+
     init(
         id: UUID = UUID(),
         language: Locale.Language,
         sourceLanguage: Locale.Language?,
         translation: String,
         detectionConfidence: Double,
-        timestamp: Date = Date()
+        timestamp: Date = Date(),
+        romanization: String? = nil,
+        sourceRomanization: String? = nil,
+        romanizationSystem: RomanizationSystem? = nil,
+        linguisticAnalysis: LinguisticAnalysis? = nil
     ) {
         self.id = id
         self.language = language
@@ -29,6 +42,10 @@ struct TranslationResult: Identifiable, Sendable {
         self.translation = translation
         self.detectionConfidence = detectionConfidence
         self.timestamp = timestamp
+        self.romanization = romanization
+        self.sourceRomanization = sourceRomanization
+        self.romanizationSystem = romanizationSystem
+        self.linguisticAnalysis = linguisticAnalysis
     }
 
     /// Human-readable language name
@@ -45,5 +62,17 @@ struct TranslationResult: Identifiable, Sendable {
     /// Confidence level as percentage string
     var confidencePercentage: String {
         String(format: "%.0f%%", detectionConfidence * 100)
+    }
+
+    /// Whether this language uses a non-Latin script and could benefit from romanization
+    var needsRomanization: Bool {
+        let script = Script.detect(from: language)
+        return script.needsRomanization
+    }
+
+    /// The layout direction for this language (RTL for Arabic/Hebrew, LTR otherwise)
+    var layoutDirection: LayoutDirection {
+        let script = Script.detect(from: language)
+        return script.isRTL ? .rightToLeft : .leftToRight
     }
 }
