@@ -10,6 +10,7 @@ import SwiftUI
 struct TranslationResultRow: View {
     let result: TranslationResult
     @State private var showCopyConfirmation = false
+    @State private var isAnalysisExpanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -29,7 +30,38 @@ struct TranslationResultRow: View {
             Text(result.translation)
                 .font(.body)
                 .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: result.layoutDirection == .rightToLeft ? .trailing : .leading)
+                .environment(\.layoutDirection, result.layoutDirection)
+
+            // Romanization (target)
+            if let romanization = result.romanization {
+                HStack(spacing: 6) {
+                    Text(romanization)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .italic()
+                        .textSelection(.enabled)
+                }
+                .padding(.vertical, 4)
+            }
+
+            // Linguistic Analysis (expandable)
+            if let analysis = result.linguisticAnalysis, analysis.hasData {
+                DisclosureGroup(
+                    isExpanded: $isAnalysisExpanded,
+                    content: {
+                        LinguisticAnalysisView(analysis: analysis, layoutDirection: result.layoutDirection)
+                            .padding(.top, 8)
+                    },
+                    label: {
+                        Label("Linguistic Analysis", systemImage: "brain")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.secondary)
+                    }
+                )
+                .tint(.blue)
+            }
 
             // Action buttons
             HStack(spacing: 16) {

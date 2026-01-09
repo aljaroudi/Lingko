@@ -16,6 +16,12 @@ struct TranslationView: View {
     @State private var showLanguageSelection = false
     @State private var debounceTask: Task<Void, Never>?
     @State private var detectedLanguage: String?
+    @State private var sourceRomanization: String?
+    @FocusState private var isInputFocused: Bool
+
+    // Feature toggles
+    @State private var includeLinguisticAnalysis = false
+    @State private var includeRomanization = true
 
     private let debounceDelay: Duration = .milliseconds(500)
 
@@ -36,6 +42,14 @@ struct TranslationView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     languageSelectionButton
+                }
+
+                ToolbarItem(placement: .keyboard) {
+                    Button {
+                        isInputFocused = false
+                    } label: {
+                        Image(systemName: "keyboard.chevron.compact.down")
+                    }
                 }
             }
             .sheet(isPresented: $showLanguageSelection) {
@@ -76,9 +90,49 @@ struct TranslationView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(Color(.separator), lineWidth: 0.5)
                 )
+                .focused($isInputFocused)
                 .onChange(of: inputText) { _, newValue in
                     handleTextChange(newValue)
                 }
+
+            // Source romanization
+            if let romanization = sourceRomanization {
+                HStack(spacing: 6) {
+                    Image(systemName: "textformat.abc")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Text(romanization)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .italic()
+                        .textSelection(.enabled)
+                }
+            }
+
+            // Feature toggles
+            VStack(spacing: 8) {
+                Toggle(isOn: $includeRomanization) {
+                    Label("Romanization", systemImage: "textformat.abc")
+                        .font(.subheadline)
+                }
+                .onChange(of: includeRomanization) { _, _ in
+                    if !inputText.isEmpty {
+                        handleTextChange(inputText)
+                    }
+                }
+
+                Toggle(isOn: $includeLinguisticAnalysis) {
+                    Label("Linguistic Analysis", systemImage: "brain")
+                        .font(.subheadline)
+                }
+                .onChange(of: includeLinguisticAnalysis) { _, _ in
+                    if !inputText.isEmpty {
+                        handleTextChange(inputText)
+                    }
+                }
+            }
+            .padding(.vertical, 8)
 
             if isTranslating {
                 HStack(spacing: 8) {
@@ -117,6 +171,7 @@ struct TranslationView: View {
                 }
                 .padding()
             }
+            .scrollDismissesKeyboard(.interactively)
             .background(Color(.systemGroupedBackground))
         }
     }
@@ -149,6 +204,7 @@ struct TranslationView: View {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             translations = []
             detectedLanguage = nil
+            sourceRomanization = nil
             isTranslating = false
             return
         }
@@ -178,12 +234,21 @@ struct TranslationView: View {
                 ?? language.minimalIdentifier
         }
 
-        // Perform translation
+        // Perform translation with feature flags
         let results = await service.translateToAll(
             text: text,
             from: language,
-            to: selectedLanguages
+            to: selectedLanguages,
+            includeLinguisticAnalysis: includeLinguisticAnalysis,
+            includeRomanization: includeRomanization
         )
+
+        // Extract source romanization from first result if available
+        if includeRomanization, let firstResult = results.first {
+            sourceRomanization = firstResult.sourceRomanization
+        } else {
+            sourceRomanization = nil
+        }
 
         // Update UI
         translations = results
