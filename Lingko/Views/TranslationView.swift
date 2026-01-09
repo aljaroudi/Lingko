@@ -9,6 +9,7 @@ import SwiftUI
 
 struct TranslationView: View {
     @State private var service = TranslationService()
+    @State private var audioService = AudioService()
     @State private var inputText = ""
     @State private var translations: [TranslationResult] = []
     @State private var selectedLanguages: Set<Locale.Language> = []
@@ -18,6 +19,7 @@ struct TranslationView: View {
     @State private var detectedLanguage: String?
     @State private var sourceRomanization: String?
     @FocusState private var isInputFocused: Bool
+    @State private var speechRate: Float = 0.5
 
     // Feature toggles
     @State private var includeLinguisticAnalysis = false
@@ -54,6 +56,9 @@ struct TranslationView: View {
             }
             .sheet(isPresented: $showLanguageSelection) {
                 LanguageSelectionView(selectedLanguages: $selectedLanguages)
+            }
+            .onDisappear {
+                audioService.stop()
             }
         }
     }
@@ -134,6 +139,26 @@ struct TranslationView: View {
             }
             .padding(.vertical, 8)
 
+            // Speech rate control
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Label("Speech Rate", systemImage: "gauge.with.dots.needle.33percent")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Text(String(format: "%.1fx", speechRate))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+
+                Slider(value: $speechRate, in: 0.3...0.7, step: 0.1)
+                    .tint(.accentColor)
+            }
+            .padding(.vertical, 4)
+
             if isTranslating {
                 HStack(spacing: 8) {
                     ProgressView()
@@ -166,7 +191,11 @@ struct TranslationView: View {
             ScrollView {
                 LazyVStack(spacing: 16) {
                     ForEach(translations) { result in
-                        TranslationResultRow(result: result)
+                        TranslationResultRow(
+                            result: result,
+                            audioService: audioService,
+                            speechRate: speechRate
+                        )
                     }
                 }
                 .padding()
