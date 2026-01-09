@@ -24,6 +24,12 @@ struct TranslationResult: Identifiable, Sendable {
     // Linguistic analysis
     var linguisticAnalysis: LinguisticAnalysis?
 
+    // AI-enhanced (optional)
+    var alternatives: [Alternative]? // Other ways to say it
+    var exampleSentences: [String]? // Usage examples
+    var formalityLevel: FormalityLevel? // Formal/informal/neutral
+    var culturalNotes: String? // Context about usage
+
     init(
         id: UUID = UUID(),
         language: Locale.Language,
@@ -34,7 +40,11 @@ struct TranslationResult: Identifiable, Sendable {
         romanization: String? = nil,
         sourceRomanization: String? = nil,
         romanizationSystem: RomanizationSystem? = nil,
-        linguisticAnalysis: LinguisticAnalysis? = nil
+        linguisticAnalysis: LinguisticAnalysis? = nil,
+        alternatives: [Alternative]? = nil,
+        exampleSentences: [String]? = nil,
+        formalityLevel: FormalityLevel? = nil,
+        culturalNotes: String? = nil
     ) {
         self.id = id
         self.language = language
@@ -46,6 +56,10 @@ struct TranslationResult: Identifiable, Sendable {
         self.sourceRomanization = sourceRomanization
         self.romanizationSystem = romanizationSystem
         self.linguisticAnalysis = linguisticAnalysis
+        self.alternatives = alternatives
+        self.exampleSentences = exampleSentences
+        self.formalityLevel = formalityLevel
+        self.culturalNotes = culturalNotes
     }
 
     /// Human-readable language name
