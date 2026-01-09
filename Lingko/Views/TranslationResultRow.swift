@@ -9,8 +9,12 @@ import SwiftUI
 
 struct TranslationResultRow: View {
     let result: TranslationResult
+    let audioService: AudioService
+    let speechRate: Float
+
     @State private var showCopyConfirmation = false
     @State private var isAnalysisExpanded = false
+    @State private var isSpeaking = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -65,6 +69,19 @@ struct TranslationResultRow: View {
 
             // Action buttons
             HStack(spacing: 16) {
+                Button {
+                    toggleSpeech()
+                } label: {
+                    Label(
+                        isSpeaking ? "Stop" : "Speak",
+                        systemImage: isSpeaking ? "stop.circle.fill" : "speaker.wave.2"
+                    )
+                    .font(.footnote)
+                    .fontWeight(.medium)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
                 Button {
                     copyToClipboard()
                 } label: {
@@ -139,17 +156,51 @@ struct TranslationResultRow: View {
             }
         }
     }
+
+    private func toggleSpeech() {
+        if isSpeaking {
+            audioService.stop()
+            isSpeaking = false
+        } else {
+            audioService.speak(
+                text: result.translation,
+                language: result.language,
+                rate: speechRate
+            )
+            isSpeaking = true
+
+            // Monitor speech completion
+            monitorSpeechCompletion()
+        }
+    }
+
+    private func monitorSpeechCompletion() {
+        // Poll the audio service to detect when speech finishes
+        Task {
+            try? await Task.sleep(for: .milliseconds(100))
+            while isSpeaking && audioService.isPlaying {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            if isSpeaking && !audioService.isPlaying {
+                isSpeaking = false
+            }
+        }
+    }
 }
 
 #Preview {
-    VStack(spacing: 16) {
+    let audioService = AudioService()
+
+    return VStack(spacing: 16) {
         TranslationResultRow(
             result: TranslationResult(
                 language: Locale.Language(identifier: "es"),
                 sourceLanguage: Locale.Language(identifier: "en"),
                 translation: "Hola, ¿cómo estás?",
                 detectionConfidence: 0.95
-            )
+            ),
+            audioService: audioService,
+            speechRate: 0.5
         )
 
         TranslationResultRow(
@@ -158,7 +209,9 @@ struct TranslationResultRow: View {
                 sourceLanguage: Locale.Language(identifier: "en"),
                 translation: "Bonjour, comment allez-vous?",
                 detectionConfidence: 0.65
-            )
+            ),
+            audioService: audioService,
+            speechRate: 0.5
         )
 
         TranslationResultRow(
@@ -167,7 +220,9 @@ struct TranslationResultRow: View {
                 sourceLanguage: Locale.Language(identifier: "en"),
                 translation: "こんにちは、お元気ですか？",
                 detectionConfidence: 0.45
-            )
+            ),
+            audioService: audioService,
+            speechRate: 0.5
         )
     }
     .padding()
