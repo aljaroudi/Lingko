@@ -18,101 +18,161 @@ struct TranslationView: View {
     @State private var historyService = HistoryService()
     @State private var translationMemoryService = TranslationMemoryService()
     @State private var tagService = TagService()
-    @State private var inputText: String
+    @State private var connectivityService = ConnectivityService()
+    @Binding var inputText: String
     @State private var translations: [TranslationResult] = []
     @State private var selectedLanguages: Set<Locale.Language> = LanguagePreferences.loadSelectedLanguages()
     @State private var isTranslating = false
     @State private var showLanguageSelection = false
     @State private var showImageTranslation = false
+    @State private var showSettings = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var selectedImage: UIImage?
+    
+    // Computed binding that only shows sheet when image is available
+    private var showImageTranslationBinding: Binding<Bool> {
+        Binding(
+            get: { showImageTranslation && selectedImage != nil },
+            set: { newValue in
+                showImageTranslation = newValue
+                if !newValue {
+                    // Clear image when sheet is dismissed
+                    selectedImage = nil
+                    selectedPhotoItem = nil
+                }
+            }
+        )
+    }
     @State private var debounceTask: Task<Void, Never>?
     @State private var detectedLanguage: String?
     @State private var sourceRomanization: String?
+    @State private var errorMessage: ErrorMessage?
+    @State private var errorTrigger = UUID()
     @FocusState private var isInputFocused: Bool
-    @State private var speechRate: Float = 0.5
+    @AppStorage("defaultSpeechRate") private var speechRate: Double = 0.5
     @State private var translationMemorySuggestions: [TranslationMemorySuggestion] = []
 
     // Feature toggles
-    @State private var includeLinguisticAnalysis = false
-    @State private var includeRomanization = true
-    @State private var autoSaveToHistory = true
+    @AppStorage("includeLinguisticAnalysis") private var includeLinguisticAnalysis: Bool = false
+    @AppStorage("includeRomanization") private var includeRomanization: Bool = true
+    @AppStorage("autoSaveToHistory") private var autoSaveToHistory: Bool = true
 
     private let debounceDelay: Duration = .milliseconds(500)
 
-    init(initialText: String = "") {
-        _inputText = State(initialValue: initialText)
+    init(initialText: Binding<String>) {
+        _inputText = initialText
     }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Input section
-                inputSection
-                    .padding()
-                    .background(Color(.systemGroupedBackground))
+            mainContent
+                .navigationTitle("Lingko")
+                .navigationBarTitleDisplayMode(.inline)
+                .errorBanner($errorMessage, onRetry: retryLastTranslation)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Image(systemName: "gear")
+                        }
+                        .accessibilityLabel("Settings")
+                        .accessibilityHint("Open app settings")
+                    }
 
-                // Translation memory suggestions
-                if !translationMemorySuggestions.isEmpty {
-                    translationMemorySuggestionsSection
-                }
+                    ToolbarItem(placement: .primaryAction) {
+                        languageSelectionButton
+                    }
 
-                Divider()
+                    ToolbarItem(placement: .secondaryAction) {
+                        PhotosPicker(
+                            selection: $selectedPhotoItem,
+                            matching: .images
+                        ) {
+                            Label("Image Translation", systemImage: "photo")
+                        }
+                    }
 
-                // Results section
-                resultsSection
-            }
-            .navigationTitle("Lingko")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    languageSelectionButton
-                }
-
-                ToolbarItem(placement: .secondaryAction) {
-                    PhotosPicker(
-                        selection: $selectedPhotoItem,
-                        matching: .images
-                    ) {
-                        Label("Image Translation", systemImage: "photo")
+                    ToolbarItem(placement: .keyboard) {
+                        Button {
+                            isInputFocused = false
+                        } label: {
+                            Image(systemName: "keyboard.chevron.compact.down")
+                        }
                     }
                 }
-
-                ToolbarItem(placement: .keyboard) {
-                    Button {
-                        isInputFocused = false
-                    } label: {
-                        Image(systemName: "keyboard.chevron.compact.down")
+                .sheet(isPresented: $showLanguageSelection) {
+                    LanguageSelectionView(selectedLanguages: $selectedLanguages)
+                }
+                .sheet(isPresented: $showSettings) {
+                    SettingsView()
+                }
+                .sheet(isPresented: showImageTranslationBinding) {
+                    // The binding guarantees selectedImage is non-nil when sheet is shown
+                    if let image = selectedImage {
+                        CameraTranslationView(
+                            initialImage: image,
+                            selectedLanguages: selectedLanguages,
+                            autoSaveToHistory: autoSaveToHistory,
+                            historyService: historyService,
+                            aiService: aiService,
+                            tagService: tagService,
+                            modelContext: modelContext
+                        )
+                    } else {
+                        // Fallback empty view (should never happen due to binding)
+                        EmptyView()
                     }
                 }
-            }
-            .sheet(isPresented: $showLanguageSelection) {
-                LanguageSelectionView(selectedLanguages: $selectedLanguages)
-            }
-            .sheet(isPresented: $showImageTranslation) {
-                if let image = selectedImage {
-                    CameraTranslationView(
-                        initialImage: image,
-                        selectedLanguages: selectedLanguages,
-                        autoSaveToHistory: autoSaveToHistory,
-                        historyService: historyService,
-                        aiService: aiService,
-                        tagService: tagService,
-                        modelContext: modelContext
-                    )
+                .onChange(of: selectedLanguages) { _, newLanguages in
+                    LanguagePreferences.saveSelectedLanguages(newLanguages)
                 }
-            }
-            .onChange(of: selectedLanguages) { _, newLanguages in
-                LanguagePreferences.saveSelectedLanguages(newLanguages)
-            }
-            .onChange(of: selectedPhotoItem) { _, newItem in
-                Task {
-                    await loadImage(from: newItem)
+                .onChange(of: selectedPhotoItem) { oldItem, newItem in
+                    // Clear state when picker is dismissed without selection
+                    if newItem == nil {
+                        selectedImage = nil
+                        showImageTranslation = false
+                        return
+                    }
+                    
+                    // Only process if we have a new item
+                    guard let newItem = newItem else { return }
+                    
+                    // Load the image
+                    Task {
+                        await loadImage(from: newItem)
+                    }
                 }
+                .onDisappear {
+                    audioService.stop()
+                }
+                .sensoryFeedback(.impact(weight: .light), trigger: translations.count)
+                .sensoryFeedback(.error, trigger: errorTrigger)
+        }
+    }
+    
+    @ViewBuilder
+    private var mainContent: some View {
+        VStack(spacing: 0) {
+            // Offline warning
+            if !connectivityService.isConnected {
+                offlineWarningBanner
             }
-            .onDisappear {
-                audioService.stop()
+
+            // Input section
+            inputSection
+                .padding()
+                .background(Color(.systemGroupedBackground))
+
+            // Translation memory suggestions
+            if !translationMemorySuggestions.isEmpty {
+                translationMemorySuggestionsSection
             }
+
+            Divider()
+
+            // Results section
+            resultsSection
         }
     }
 
@@ -122,10 +182,6 @@ struct TranslationView: View {
     private var inputSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Enter Text")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-
                 Spacer()
 
                 if let detectedLanguage {
@@ -139,19 +195,23 @@ struct TranslationView: View {
                 }
             }
 
-            TextEditor(text: $inputText)
-                .frame(minHeight: 100, maxHeight: 200)
-                .padding(8)
-                .background(Color(.systemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color(.separator), lineWidth: 0.5)
-                )
-                .focused($isInputFocused)
-                .onChange(of: inputText) { _, newValue in
-                    handleTextChange(newValue)
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $inputText)
+                    .frame(minHeight: 100, maxHeight: 200)
+                    .background(Color(.systemBackground))
+                    .focused($isInputFocused)
+                    .onChange(of: inputText) { _, newValue in
+                        handleTextChange(newValue)
+                    }
+                
+                if inputText.isEmpty {
+                    Text("Enter text")
+                        .foregroundStyle(Color(.placeholderText))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 8)
+                        .allowsHitTesting(false)
                 }
+            }
 
             // Source romanization
             if let romanization = sourceRomanization {
@@ -167,55 +227,6 @@ struct TranslationView: View {
                         .textSelection(.enabled)
                 }
             }
-
-            // Feature toggles
-            VStack(spacing: 8) {
-                Toggle(isOn: $includeRomanization) {
-                    Label("Romanization", systemImage: "textformat.abc")
-                        .font(.subheadline)
-                }
-                .onChange(of: includeRomanization) { _, _ in
-                    if !inputText.isEmpty {
-                        handleTextChange(inputText)
-                    }
-                }
-
-                Toggle(isOn: $includeLinguisticAnalysis) {
-                    Label("Linguistic Analysis", systemImage: "brain")
-                        .font(.subheadline)
-                }
-                .onChange(of: includeLinguisticAnalysis) { _, _ in
-                    if !inputText.isEmpty {
-                        handleTextChange(inputText)
-                    }
-                }
-
-                Toggle(isOn: $autoSaveToHistory) {
-                    Label("Auto-save to History", systemImage: "clock.arrow.circlepath")
-                        .font(.subheadline)
-                }
-            }
-            .padding(.vertical, 8)
-
-            // Speech rate control
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Label("Speech Rate", systemImage: "gauge.with.dots.needle.33percent")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Spacer()
-
-                    Text(String(format: "%.1fx", speechRate))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
-
-                Slider(value: $speechRate, in: 0.3...0.7, step: 0.1)
-                    .tint(.accentColor)
-            }
-            .padding(.vertical, 4)
 
             if isTranslating {
                 HStack(spacing: 8) {
@@ -233,18 +244,22 @@ struct TranslationView: View {
 
     @ViewBuilder
     private var resultsSection: some View {
-        if translations.isEmpty && !inputText.isEmpty && !isTranslating {
-            ContentUnavailableView(
-                "No Translations",
-                systemImage: "text.bubble",
-                description: Text("Try selecting different languages or entering different text")
+        if isTranslating {
+            LoadingStateView(style: .skeleton, count: min(selectedLanguages.count, 5))
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        } else if selectedLanguages.isEmpty {
+            EmptyStateView(
+                configuration: .noLanguagesSelected {
+                    showLanguageSelection = true
+                }
             )
+            .transition(.opacity)
+        } else if translations.isEmpty && !inputText.isEmpty {
+            EmptyStateView(configuration: .translationEmpty)
+                .transition(.opacity)
         } else if translations.isEmpty {
-            ContentUnavailableView(
-                "Ready to Translate",
-                systemImage: "character.bubble",
-                description: Text("Enter text above to see translations")
-            )
+            EmptyStateView(configuration: .translationEmpty)
+                .transition(.opacity)
         } else {
             ScrollView {
                 LazyVStack(spacing: 16) {
@@ -253,8 +268,12 @@ struct TranslationView: View {
                             result: result,
                             audioService: audioService,
                             aiService: aiService,
-                            speechRate: speechRate
+                            speechRate: Float(speechRate)
                         )
+                        .transition(.asymmetric(
+                            insertion: .scale(scale: 0.9).combined(with: .opacity),
+                            removal: .opacity
+                        ))
                     }
                 }
                 .padding()
@@ -262,6 +281,23 @@ struct TranslationView: View {
             .scrollDismissesKeyboard(.interactively)
             .background(Color(.systemGroupedBackground))
         }
+    }
+
+    // MARK: - Offline Warning Banner
+
+    @ViewBuilder
+    private var offlineWarningBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "wifi.slash")
+                .foregroundStyle(.orange)
+            Text("Offline - Language packs may be unavailable")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(Color.orange.opacity(0.1))
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 
     // MARK: - Translation Memory Suggestions Section
@@ -323,6 +359,9 @@ struct TranslationView: View {
         }
         .buttonStyle(.bordered)
         .buttonBorderShape(.capsule)
+        .accessibilityLabel("Select target languages")
+        .accessibilityValue("\(selectedLanguages.count) languages selected")
+        .accessibilityHint("Opens language selection sheet")
     }
 
     // MARK: - Translation Logic
@@ -364,43 +403,62 @@ struct TranslationView: View {
 
     private func performTranslation(text: String) async {
         isTranslating = true
+        errorMessage = nil
 
-        // Detect language
-        let (language, _) = service.detectLanguage(for: text)
-        if let language {
-            detectedLanguage = Locale.current.localizedString(forLanguageCode: language.minimalIdentifier)
-                ?? language.minimalIdentifier
-        }
+        do {
+            // Detect language
+            let (language, _) = service.detectLanguage(for: text)
+            if let language {
+                detectedLanguage = Locale.current.localizedString(forLanguageCode: language.minimalIdentifier)
+                    ?? language.minimalIdentifier
+            }
 
-        // Perform translation with feature flags
-        let results = await service.translateToAll(
-            text: text,
-            from: language,
-            to: selectedLanguages,
-            includeLinguisticAnalysis: includeLinguisticAnalysis,
-            includeRomanization: includeRomanization
-        )
+            // Check if languages are selected
+            guard !selectedLanguages.isEmpty else {
+                throw TranslationError.invalidConfiguration
+            }
 
-        // Extract source romanization from first result if available
-        if includeRomanization, let firstResult = results.first {
-            sourceRomanization = firstResult.sourceRomanization
-        } else {
-            sourceRomanization = nil
-        }
-
-        // Update UI
-        translations = results
-        isTranslating = false
-
-        // Auto-save to history with AI-powered tagging
-        if autoSaveToHistory && !results.isEmpty {
-            await historyService.saveTranslations(
-                results,
-                sourceText: text,
-                context: modelContext,
-                aiService: aiService,
-                tagService: tagService
+            // Perform translation with feature flags
+            let results = await service.translateToAll(
+                text: text,
+                from: language,
+                to: selectedLanguages,
+                includeLinguisticAnalysis: includeLinguisticAnalysis,
+                includeRomanization: includeRomanization
             )
+
+            // Extract source romanization from first result if available
+            if includeRomanization, let firstResult = results.first {
+                sourceRomanization = firstResult.sourceRomanization
+            } else {
+                sourceRomanization = nil
+            }
+
+            // Update UI
+            translations = results
+            isTranslating = false
+
+            // Auto-save to history with AI-powered tagging
+            if autoSaveToHistory && !results.isEmpty {
+                await historyService.saveTranslations(
+                    results,
+                    sourceText: text,
+                    context: modelContext,
+                    aiService: aiService,
+                    tagService: tagService
+                )
+            }
+        } catch {
+            isTranslating = false
+            errorMessage = ErrorMessage.from(error)
+            errorTrigger = UUID()
+        }
+    }
+
+    private func retryLastTranslation() {
+        guard !inputText.isEmpty else { return }
+        Task {
+            await performTranslation(text: inputText)
         }
     }
 
@@ -421,13 +479,32 @@ struct TranslationView: View {
         do {
             if let data = try await item.loadTransferable(type: Data.self),
                let image = UIImage(data: data) {
+                // Set image first
                 await MainActor.run {
                     selectedImage = image
-                    showImageTranslation = true
+                }
+                // Small delay to ensure state propagation, then show sheet
+                // This ensures the view has updated with the new image before sheet is presented
+                try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
+                await MainActor.run {
+                    // Verify image is still set before showing sheet
+                    if selectedImage != nil {
+                        showImageTranslation = true
+                    }
+                }
+            } else {
+                // Failed to load image data
+                await MainActor.run {
+                    selectedImage = nil
+                    showImageTranslation = false
                 }
             }
         } catch {
             print("Failed to load image: \(error)")
+            await MainActor.run {
+                selectedImage = nil
+                showImageTranslation = false
+            }
         }
     }
 }
@@ -478,5 +555,5 @@ struct TranslationMemorySuggestionCard: View {
 }
 
 #Preview {
-    TranslationView()
+    TranslationView(initialText: .constant(""))
 }

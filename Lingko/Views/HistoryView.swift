@@ -21,10 +21,11 @@ struct HistoryView: View {
     @State private var showFavoritesOnly = false
     @State private var selectedTagFilter: Tag?
     @State private var showClearAllAlert = false
-    @State private var showExportSheet = false
     @State private var showTagEditor = false
     @State private var showTagManagement = false
     @State private var selectedTranslationForTagEdit: SavedTranslation?
+    @State private var deletionTrigger = UUID()
+    @State private var favoriteToggleTrigger = UUID()
 
     // Callback for loading translation
     var onLoadTranslation: ((String) -> Void)?
@@ -78,15 +79,6 @@ struct HistoryView: View {
                         Image(systemName: "ellipsis.circle")
                     }
                 }
-
-                ToolbarItem(placement: .secondaryAction) {
-                    Button {
-                        showExportSheet = true
-                    } label: {
-                        Label("Export", systemImage: "square.and.arrow.up")
-                    }
-                    .disabled(filteredHistory.isEmpty)
-                }
             }
             .alert("Clear All History", isPresented: $showClearAllAlert) {
                 Button("Cancel", role: .cancel) { }
@@ -95,9 +87,6 @@ struct HistoryView: View {
                 }
             } message: {
                 Text("Are you sure you want to delete all translation history? This action cannot be undone.")
-            }
-            .sheet(isPresented: $showExportSheet) {
-                ExportView(history: filteredHistory)
             }
             .sheet(isPresented: $showTagEditor) {
                 if let translation = selectedTranslationForTagEdit {
@@ -111,6 +100,8 @@ struct HistoryView: View {
                 // Initialize default tags if they don't exist
                 tagService.initializeDefaultTags(context: modelContext)
             }
+            .sensoryFeedback(.impact(weight: .medium), trigger: deletionTrigger)
+            .sensoryFeedback(.success, trigger: favoriteToggleTrigger)
         }
     }
 
@@ -250,6 +241,7 @@ struct HistoryView: View {
                         )
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {
+                                deletionTrigger = UUID()
                                 historyService.deleteTranslation(translation, context: modelContext)
                             } label: {
                                 Label("Delete", systemImage: "trash")
@@ -257,6 +249,7 @@ struct HistoryView: View {
                         }
                         .swipeActions(edge: .leading) {
                             Button {
+                                favoriteToggleTrigger = UUID()
                                 historyService.toggleFavorite(translation, context: modelContext)
                             } label: {
                                 Label(
@@ -275,28 +268,26 @@ struct HistoryView: View {
 
     @ViewBuilder
     private var emptyStateView: some View {
-        ContentUnavailableView {
-            Label("No History", systemImage: "clock")
-        } description: {
-            if showFavoritesOnly {
-                Text("You haven't favorited any translations yet")
-            } else if !searchText.isEmpty {
-                Text("No translations match '\(searchText)'")
-            } else {
-                Text("Your translation history will appear here")
-            }
-        } actions: {
-            if showFavoritesOnly {
-                Button("Show All") {
-                    showFavoritesOnly = false
-                }
-                .buttonStyle(.bordered)
-            } else if !searchText.isEmpty {
-                Button("Clear Search") {
-                    searchText = ""
-                }
-                .buttonStyle(.bordered)
-            }
+        if showFavoritesOnly {
+            EmptyStateView(
+                configuration: EmptyStateConfiguration(
+                    iconName: "star.slash",
+                    iconColor: .yellow,
+                    title: "No favorites yet",
+                    message: "You haven't favorited any translations yet",
+                    action: EmptyStateAction(
+                        title: "Show All",
+                        iconName: "clock",
+                        handler: {
+                            showFavoritesOnly = false
+                        }
+                    )
+                )
+            )
+        } else if !searchText.isEmpty {
+            EmptyStateView(configuration: .searchEmpty(query: searchText))
+        } else {
+            EmptyStateView(configuration: .historyEmpty)
         }
     }
 }
@@ -431,29 +422,6 @@ private struct TranslationEntryView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
-
-            // Romanization (if available)
-            if let romanization = entry.romanization {
-                HStack(spacing: 4) {
-                    Image(systemName: "textformat.abc")
-                        .font(.caption2)
-                    Text(romanization)
-                        .font(.caption)
-                        .italic()
-                }
-                .foregroundStyle(.tertiary)
-            }
-
-            // Sentiment (if available)
-            if let sentiment = entry.sentimentDescription {
-                HStack(spacing: 4) {
-                    Image(systemName: sentimentIcon(for: entry.sentiment))
-                        .font(.caption2)
-                    Text(sentiment)
-                        .font(.caption)
-                }
-                .foregroundStyle(sentimentColor(for: entry.sentiment))
-            }
         }
         .padding(.leading, 8)
         .padding(.vertical, 2)
@@ -471,180 +439,6 @@ private struct TranslationEntryView: View {
         if sentiment > 0.3 { return .green }
         if sentiment < -0.3 { return .red }
         return .gray
-    }
-}
-
-// MARK: - Export View
-
-private struct ExportView: View {
-    @Environment(\.dismiss) private var dismiss
-    let history: [SavedTranslation]
-
-    @State private var exportFormat: ExportFormat = .text
-    @State private var exportedText = ""
-
-    enum ExportFormat: String, CaseIterable {
-        case text = "Text"
-        case csv = "CSV"
-        case json = "JSON"
-
-        var fileExtension: String {
-            switch self {
-            case .text: return "txt"
-            case .csv: return "csv"
-            case .json: return "json"
-            }
-        }
-    }
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                Picker("Format", selection: $exportFormat) {
-                    ForEach(ExportFormat.allCases, id: \.self) { format in
-                        Text(format.rawValue).tag(format)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding()
-
-                ScrollView {
-                    Text(generateExportText())
-                        .font(.system(.caption, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                }
-                .background(Color(.systemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .padding(.horizontal)
-
-                ShareLink(
-                    item: generateExportText(),
-                    preview: SharePreview(
-                        "Translation History",
-                        image: Image(systemName: "doc.text")
-                    )
-                ) {
-                    Label("Share", systemImage: "square.and.arrow.up")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .padding(.horizontal)
-            }
-            .navigationTitle("Export History")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
-
-    private func generateExportText() -> String {
-        switch exportFormat {
-        case .text:
-            return generateTextFormat()
-        case .csv:
-            return generateCSVFormat()
-        case .json:
-            return generateJSONFormat()
-        }
-    }
-
-    private func generateTextFormat() -> String {
-        var text = "Translation History\n"
-        text += "Exported: \(Date().formatted())\n"
-        text += String(repeating: "=", count: 50) + "\n\n"
-
-        for (index, entry) in history.enumerated() {
-            text += "[\(index + 1)] \(entry.timestamp.formatted())\n"
-            text += "From: \(entry.sourceLanguageName)\n"
-            text += "Source: \(entry.sourceText)\n"
-            text += "\nTranslations (\(entry.translationCount)):\n"
-
-            if let translations = entry.decodedTranslations {
-                for translation in translations {
-                    text += "  • \(translation.languageName): \(translation.text)\n"
-                    if let romanization = translation.romanization {
-                        text += "    Romanization: \(romanization)\n"
-                    }
-                    if let sentiment = translation.sentimentDescription {
-                        text += "    Sentiment: \(sentiment)\n"
-                    }
-                }
-            }
-
-            text += "\n"
-        }
-
-        return text
-    }
-
-    private func generateCSVFormat() -> String {
-        var csv = "Timestamp,Source Language,Source Text,Target Language,Translation,Romanization,Sentiment,Favorite\n"
-
-        for entry in history {
-            if let translations = entry.decodedTranslations {
-                for translation in translations {
-                    let fields = [
-                        entry.timestamp.ISO8601Format(),
-                        entry.sourceLanguageName,
-                        escapeCSV(entry.sourceText),
-                        translation.languageName,
-                        escapeCSV(translation.text),
-                        escapeCSV(translation.romanization ?? ""),
-                        translation.sentimentDescription ?? "",
-                        entry.isFavorite ? "Yes" : "No"
-                    ]
-                    csv += fields.joined(separator: ",") + "\n"
-                }
-            }
-        }
-
-        return csv
-    }
-
-    private func generateJSONFormat() -> String {
-        let jsonArray = history.map { entry in
-            var entryDict: [String: Any] = [
-                "timestamp": entry.timestamp.ISO8601Format(),
-                "sourceLanguage": entry.sourceLanguageName,
-                "sourceText": entry.sourceText,
-                "confidence": entry.detectionConfidence,
-                "isFavorite": entry.isFavorite
-            ]
-
-            if let translations = entry.decodedTranslations {
-                let translationsArray = translations.map { translation in
-                    [
-                        "targetLanguage": translation.languageName,
-                        "text": translation.text,
-                        "romanization": translation.romanization ?? "",
-                        "sentiment": translation.sentimentDescription ?? ""
-                    ] as [String: Any]
-                }
-                entryDict["translations"] = translationsArray
-            }
-
-            return entryDict
-        }
-
-        if let jsonData = try? JSONSerialization.data(withJSONObject: jsonArray, options: .prettyPrinted),
-           let jsonString = String(data: jsonData, encoding: .utf8) {
-            return jsonString
-        }
-
-        return "[]"
-    }
-
-    private func escapeCSV(_ text: String) -> String {
-        if text.contains(",") || text.contains("\"") || text.contains("\n") {
-            return "\"\(text.replacingOccurrences(of: "\"", with: "\"\""))\""
-        }
-        return text
     }
 }
 

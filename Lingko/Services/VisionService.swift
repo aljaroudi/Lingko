@@ -10,6 +10,7 @@ import Vision
 import CoreImage
 import OSLog
 import UIKit
+import NaturalLanguage
 
 @MainActor
 struct VisionService {
@@ -155,7 +156,3 @@ enum VisionError: LocalizedError {
         }
     }
 }
-
-// MARK: - NaturalLanguage Import
-
-import NaturalLanguage

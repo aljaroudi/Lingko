@@ -86,36 +86,28 @@ struct TranslationResultRow: View {
             .tint(.purple)
 
             // Action buttons
-            HStack(spacing: 16) {
-                Button {
-                    toggleSpeech()
-                } label: {
-                    Label(
-                        isSpeaking ? "Stop" : "Speak",
-                        systemImage: isSpeaking ? "stop.circle.fill" : "speaker.wave.2"
-                    )
-                    .font(.footnote)
-                    .fontWeight(.medium)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+            HStack(spacing: 20) {
+                Button(
+                    isSpeaking ? "Stop" : "Speak",
+                    systemImage: isSpeaking ? "stop.circle.fill" : "speaker.wave.2",
+                    action: toggleSpeech
+                )
+                .labelStyle(.iconOnly)
 
-                Button {
-                    copyToClipboard()
-                } label: {
-                    Label("Copy", systemImage: showCopyConfirmation ? "checkmark" : "doc.on.doc")
-                        .font(.footnote)
-                        .fontWeight(.medium)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                Button(
+                    "Copy",
+                    systemImage: showCopyConfirmation ? "checkmark" : "doc.on.doc",
+                    action: copyToClipboard
+                )
 
                 Spacer()
             }
+            .labelStyle(.iconOnly)
         }
         .padding()
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .sensoryFeedback(.success, trigger: showCopyConfirmation)
     }
 
     // MARK: - Confidence Indicator
