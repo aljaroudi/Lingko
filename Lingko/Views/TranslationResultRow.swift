@@ -10,10 +10,12 @@ import SwiftUI
 struct TranslationResultRow: View {
     let result: TranslationResult
     let audioService: AudioService
+    let aiService: AIAssistantService
     let speechRate: Float
 
     @State private var showCopyConfirmation = false
     @State private var isAnalysisExpanded = false
+    @State private var isAIEnhancedExpanded = false
     @State private var isSpeaking = false
 
     var body: some View {
@@ -66,6 +68,22 @@ struct TranslationResultRow: View {
                 )
                 .tint(.blue)
             }
+
+            // AI-Enhanced Features (expandable)
+            DisclosureGroup(
+                isExpanded: $isAIEnhancedExpanded,
+                content: {
+                    AIEnhancedView(translation: result, aiService: aiService)
+                        .padding(.top, 8)
+                },
+                label: {
+                    Label("AI Insights", systemImage: "sparkles")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
+                }
+            )
+            .tint(.purple)
 
             // Action buttons
             HStack(spacing: 16) {
@@ -190,6 +208,7 @@ struct TranslationResultRow: View {
 
 #Preview {
     let audioService = AudioService()
+    let aiService = AIAssistantService()
 
     return VStack(spacing: 16) {
         TranslationResultRow(
@@ -200,6 +219,7 @@ struct TranslationResultRow: View {
                 detectionConfidence: 0.95
             ),
             audioService: audioService,
+            aiService: aiService,
             speechRate: 0.5
         )
 
@@ -211,6 +231,7 @@ struct TranslationResultRow: View {
                 detectionConfidence: 0.65
             ),
             audioService: audioService,
+            aiService: aiService,
             speechRate: 0.5
         )
 
@@ -222,6 +243,7 @@ struct TranslationResultRow: View {
                 detectionConfidence: 0.45
             ),
             audioService: audioService,
+            aiService: aiService,
             speechRate: 0.5
         )
     }

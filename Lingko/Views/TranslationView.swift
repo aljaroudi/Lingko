@@ -13,6 +13,7 @@ struct TranslationView: View {
 
     @State private var service = TranslationService()
     @State private var audioService = AudioService()
+    @State private var aiService = AIAssistantService()
     @State private var historyService = HistoryService()
     @State private var inputText: String
     @State private var translations: [TranslationResult] = []
@@ -50,6 +51,7 @@ struct TranslationView: View {
                 resultsSection
             }
             .navigationTitle("Lingko")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     languageSelectionButton
@@ -208,6 +210,7 @@ struct TranslationView: View {
                         TranslationResultRow(
                             result: result,
                             audioService: audioService,
+                            aiService: aiService,
                             speechRate: speechRate
                         )
                     }
