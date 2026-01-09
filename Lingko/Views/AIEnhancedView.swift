@@ -53,9 +53,9 @@ struct AIEnhancedView: View {
             }
 
             // Ask About Translation
-            if aiService.isAvailable {
-                askQuestionButton
-            }
+//            if aiService.isAvailable {
+//                askQuestionButton
+//            }
         }
     }
 

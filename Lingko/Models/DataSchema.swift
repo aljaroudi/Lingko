@@ -24,7 +24,7 @@ enum DataSchemaV3: VersionedSchema {
          self.ConversationSession.self,
     ] }
 
-    static let versionIdentifier = Schema.Version(3, 0, 0)
+    static let versionIdentifier = Schema.Version(1, 0, 0)
 
     /// SavedTranslation model with tag support (Phase 6 - Enhanced History)
     @Model
