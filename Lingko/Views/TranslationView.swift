@@ -6,11 +6,15 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct TranslationView: View {
+    @Environment(\.modelContext) private var modelContext
+
     @State private var service = TranslationService()
     @State private var audioService = AudioService()
-    @State private var inputText = ""
+    @State private var historyService = HistoryService()
+    @State private var inputText: String
     @State private var translations: [TranslationResult] = []
     @State private var selectedLanguages: Set<Locale.Language> = []
     @State private var isTranslating = false
@@ -24,8 +28,13 @@ struct TranslationView: View {
     // Feature toggles
     @State private var includeLinguisticAnalysis = false
     @State private var includeRomanization = true
+    @State private var autoSaveToHistory = true
 
     private let debounceDelay: Duration = .milliseconds(500)
+
+    init(initialText: String = "") {
+        _inputText = State(initialValue: initialText)
+    }
 
     var body: some View {
         NavigationStack {
@@ -135,6 +144,11 @@ struct TranslationView: View {
                     if !inputText.isEmpty {
                         handleTextChange(inputText)
                     }
+                }
+
+                Toggle(isOn: $autoSaveToHistory) {
+                    Label("Auto-save to History", systemImage: "clock.arrow.circlepath")
+                        .font(.subheadline)
                 }
             }
             .padding(.vertical, 8)
@@ -282,6 +296,11 @@ struct TranslationView: View {
         // Update UI
         translations = results
         isTranslating = false
+
+        // Auto-save to history
+        if autoSaveToHistory && !results.isEmpty {
+            historyService.saveTranslations(results, sourceText: text, context: modelContext)
+        }
     }
 }
 
