@@ -11,36 +11,37 @@ struct LanguageSelectionView: View {
     @Binding var selectedLanguages: Set<Locale.Language>
     @State private var searchText = ""
     @State private var service = TranslationService()
-    @State private var supportedLanguages: [Locale.Language] = []
     @State private var installedLanguages: Set<Locale.Language> = []
     @State private var isLoading = true
     @State private var showOnlyInstalled = false
     @Environment(\.dismiss) private var dismiss
 
-    /// List of supported translation languages from Translation framework
-    private var availableLanguages: [Locale.Language] {
+    private let minimumLanguageCount = 2
+
+    /// Use curated list of supported languages
+    private var availableLanguages: [LanguageInfo] {
         let languages = showOnlyInstalled
-            ? supportedLanguages.filter { installedLanguages.contains($0) }
-            : supportedLanguages
+            ? SupportedLanguages.all.filter { installedLanguages.contains($0.language) }
+            : SupportedLanguages.all
 
         // Sort: installed first, then alphabetically
-        return languages.sorted { language1, language2 in
-            let installed1 = installedLanguages.contains(language1)
-            let installed2 = installedLanguages.contains(language2)
+        return languages.sorted { lang1, lang2 in
+            let installed1 = installedLanguages.contains(lang1.language)
+            let installed2 = installedLanguages.contains(lang2.language)
 
             if installed1 != installed2 {
                 return installed1 // installed languages first
             }
-            return languageName(for: language1) < languageName(for: language2)
+            return lang1.name < lang2.name
         }
     }
 
-    private var filteredLanguages: [Locale.Language] {
+    private var filteredLanguages: [LanguageInfo] {
         if searchText.isEmpty {
             return availableLanguages
         }
-        return availableLanguages.filter { language in
-            languageName(for: language).localizedCaseInsensitiveContains(searchText)
+        return availableLanguages.filter { languageInfo in
+            languageInfo.name.localizedCaseInsensitiveContains(searchText)
         }
     }
 
@@ -51,18 +52,34 @@ struct LanguageSelectionView: View {
                     ProgressView("Loading languages...")
                 } else {
                     List {
+                        if selectedLanguages.count <= minimumLanguageCount {
+                            Section {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "info.circle.fill")
+                                        .foregroundStyle(.blue)
+                                    Text("At least \(minimumLanguageCount) languages must be selected")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+
                         Section {
                             Toggle("Show only installed languages", isOn: $showOnlyInstalled)
                         }
 
                         Section {
-                            ForEach(filteredLanguages, id: \.self) { language in
+                            ForEach(filteredLanguages) { languageInfo in
+                                let language = languageInfo.language
+                                let isSelected = selectedLanguages.contains(language)
+                                let canDeselect = selectedLanguages.count > minimumLanguageCount
+
                                 Button {
-                                    toggleLanguage(language)
+                                    toggleLanguage(language, canDeselect: canDeselect)
                                 } label: {
                                     HStack {
                                         VStack(alignment: .leading, spacing: 4) {
-                                            Text(languageName(for: language))
+                                            Text(languageInfo.name)
                                                 .foregroundStyle(.primary)
 
                                             if !installedLanguages.contains(language) {
@@ -87,21 +104,28 @@ struct LanguageSelectionView: View {
                                             }
 
                                             // Selection checkmark
-                                            if selectedLanguages.contains(language) {
+                                            if isSelected {
                                                 Image(systemName: "checkmark")
-                                                    .foregroundStyle(.blue)
+                                                    .foregroundStyle(canDeselect ? .blue : .gray)
                                                     .fontWeight(.semibold)
                                             }
                                         }
                                     }
                                 }
                                 .buttonStyle(.plain)
+                                .disabled(isSelected && !canDeselect)
+                                .opacity((isSelected && !canDeselect) ? 0.6 : 1.0)
                             }
                         } header: {
                             if showOnlyInstalled {
                                 Text("Installed Languages (\(installedLanguages.count))")
                             } else {
-                                Text("All Supported Languages (\(supportedLanguages.count))")
+                                Text("All Supported Languages (\(SupportedLanguages.all.count))")
+                            }
+                        } footer: {
+                            if selectedLanguages.count == minimumLanguageCount {
+                                Text("You have the minimum number of languages selected. Add more to enable deselection.")
+                                    .font(.caption)
                             }
                         }
                     }
@@ -109,17 +133,11 @@ struct LanguageSelectionView: View {
                     .overlay {
                         if filteredLanguages.isEmpty && !searchText.isEmpty {
                             ContentUnavailableView.search(text: searchText)
-                        } else if supportedLanguages.isEmpty {
-                            ContentUnavailableView(
-                                "No Languages Available",
-                                systemImage: "globe.badge.chevron.backward",
-                                description: Text("Translation framework did not return any supported languages. Please check your device settings.")
-                            )
                         }
                     }
                 }
             }
-            .navigationTitle("Select Languages")
+            .navigationTitle("Select Languages (\(selectedLanguages.count))")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -127,7 +145,7 @@ struct LanguageSelectionView: View {
                         dismiss()
                     }
                     .fontWeight(.semibold)
-                    .disabled(isLoading)
+                    .disabled(isLoading || selectedLanguages.count < minimumLanguageCount)
                 }
 
                 ToolbarItem(placement: .cancellationAction) {
@@ -147,15 +165,14 @@ struct LanguageSelectionView: View {
     private func loadSupportedLanguages() async {
         isLoading = true
 
-        // Get all supported languages
-        supportedLanguages = await service.getSupportedLanguages()
-
         // Check which languages are installed
         // Use English as the reference language to check availability
         let referenceLanguage = Locale.Language(identifier: "en")
         var installed: Set<Locale.Language> = []
 
-        for language in supportedLanguages {
+        for languageInfo in SupportedLanguages.all {
+            let language = languageInfo.language
+
             // Check if this language pair is installed
             let isInstalled = await service.isLanguageInstalled(
                 from: referenceLanguage,
@@ -171,17 +188,15 @@ struct LanguageSelectionView: View {
         isLoading = false
     }
 
-    private func toggleLanguage(_ language: Locale.Language) {
+    private func toggleLanguage(_ language: Locale.Language, canDeselect: Bool) {
         if selectedLanguages.contains(language) {
-            selectedLanguages.remove(language)
+            // Only allow deselection if we have more than minimum
+            if canDeselect {
+                selectedLanguages.remove(language)
+            }
         } else {
             selectedLanguages.insert(language)
         }
-    }
-
-    private func languageName(for language: Locale.Language) -> String {
-        Locale.current.localizedString(forLanguageCode: language.minimalIdentifier)
-            ?? language.minimalIdentifier
     }
 }
 

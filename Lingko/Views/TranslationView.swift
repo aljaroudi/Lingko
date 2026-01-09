@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import PhotosUI
 
 struct TranslationView: View {
     @Environment(\.modelContext) private var modelContext
@@ -15,16 +16,22 @@ struct TranslationView: View {
     @State private var audioService = AudioService()
     @State private var aiService = AIAssistantService()
     @State private var historyService = HistoryService()
+    @State private var translationMemoryService = TranslationMemoryService()
+    @State private var tagService = TagService()
     @State private var inputText: String
     @State private var translations: [TranslationResult] = []
-    @State private var selectedLanguages: Set<Locale.Language> = []
+    @State private var selectedLanguages: Set<Locale.Language> = LanguagePreferences.loadSelectedLanguages()
     @State private var isTranslating = false
     @State private var showLanguageSelection = false
+    @State private var showImageTranslation = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var selectedImage: UIImage?
     @State private var debounceTask: Task<Void, Never>?
     @State private var detectedLanguage: String?
     @State private var sourceRomanization: String?
     @FocusState private var isInputFocused: Bool
     @State private var speechRate: Float = 0.5
+    @State private var translationMemorySuggestions: [TranslationMemorySuggestion] = []
 
     // Feature toggles
     @State private var includeLinguisticAnalysis = false
@@ -45,6 +52,11 @@ struct TranslationView: View {
                     .padding()
                     .background(Color(.systemGroupedBackground))
 
+                // Translation memory suggestions
+                if !translationMemorySuggestions.isEmpty {
+                    translationMemorySuggestionsSection
+                }
+
                 Divider()
 
                 // Results section
@@ -57,6 +69,15 @@ struct TranslationView: View {
                     languageSelectionButton
                 }
 
+                ToolbarItem(placement: .secondaryAction) {
+                    PhotosPicker(
+                        selection: $selectedPhotoItem,
+                        matching: .images
+                    ) {
+                        Label("Image Translation", systemImage: "photo")
+                    }
+                }
+
                 ToolbarItem(placement: .keyboard) {
                     Button {
                         isInputFocused = false
@@ -67,6 +88,27 @@ struct TranslationView: View {
             }
             .sheet(isPresented: $showLanguageSelection) {
                 LanguageSelectionView(selectedLanguages: $selectedLanguages)
+            }
+            .sheet(isPresented: $showImageTranslation) {
+                if let image = selectedImage {
+                    CameraTranslationView(
+                        initialImage: image,
+                        selectedLanguages: selectedLanguages,
+                        autoSaveToHistory: autoSaveToHistory,
+                        historyService: historyService,
+                        aiService: aiService,
+                        tagService: tagService,
+                        modelContext: modelContext
+                    )
+                }
+            }
+            .onChange(of: selectedLanguages) { _, newLanguages in
+                LanguagePreferences.saveSelectedLanguages(newLanguages)
+            }
+            .onChange(of: selectedPhotoItem) { _, newItem in
+                Task {
+                    await loadImage(from: newItem)
+                }
             }
             .onDisappear {
                 audioService.stop()
@@ -222,6 +264,49 @@ struct TranslationView: View {
         }
     }
 
+    // MARK: - Translation Memory Suggestions Section
+
+    @ViewBuilder
+    private var translationMemorySuggestionsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "lightbulb.fill")
+                    .foregroundStyle(.yellow)
+                    .font(.caption)
+
+                Text("Similar Translations")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    translationMemorySuggestions = []
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(translationMemorySuggestions) { suggestion in
+                        TranslationMemorySuggestionCard(suggestion: suggestion) {
+                            applySuggestion(suggestion)
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .padding(.bottom, 8)
+        }
+        .background(Color(.secondarySystemGroupedBackground))
+    }
+
     // MARK: - Language Selection Button
 
     @ViewBuilder
@@ -251,11 +336,18 @@ struct TranslationView: View {
             translations = []
             detectedLanguage = nil
             sourceRomanization = nil
+            translationMemorySuggestions = []
             isTranslating = false
             return
         }
 
-        // Create new debounced task
+        // Fetch translation memory suggestions immediately (no debounce)
+        translationMemorySuggestions = translationMemoryService.findSimilarTranslations(
+            for: text,
+            context: modelContext
+        )
+
+        // Create new debounced task for translation
         debounceTask = Task {
             do {
                 try await Task.sleep(for: debounceDelay)
@@ -300,10 +392,88 @@ struct TranslationView: View {
         translations = results
         isTranslating = false
 
-        // Auto-save to history
+        // Auto-save to history with AI-powered tagging
         if autoSaveToHistory && !results.isEmpty {
-            historyService.saveTranslations(results, sourceText: text, context: modelContext)
+            await historyService.saveTranslations(
+                results,
+                sourceText: text,
+                context: modelContext,
+                aiService: aiService,
+                tagService: tagService
+            )
         }
+    }
+
+    private func applySuggestion(_ suggestion: TranslationMemorySuggestion) {
+        // Apply the suggested text
+        inputText = suggestion.sourceText
+
+        // Clear translation memory suggestions after applying
+        translationMemorySuggestions = []
+
+        // Trigger translation
+        handleTextChange(suggestion.sourceText)
+    }
+
+    private func loadImage(from item: PhotosPickerItem?) async {
+        guard let item = item else { return }
+
+        do {
+            if let data = try await item.loadTransferable(type: Data.self),
+               let image = UIImage(data: data) {
+                await MainActor.run {
+                    selectedImage = image
+                    showImageTranslation = true
+                }
+            }
+        } catch {
+            print("Failed to load image: \(error)")
+        }
+    }
+}
+
+// MARK: - Translation Memory Suggestion Card
+
+struct TranslationMemorySuggestionCard: View {
+    let suggestion: TranslationMemorySuggestion
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Image(systemName: suggestion.confidenceIcon)
+                        .font(.caption2)
+                        .foregroundStyle(suggestion.isHighConfidence ? .green : .orange)
+
+                    Text(suggestion.similarityPercentage)
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+                }
+
+                Text(suggestion.sourceText)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+
+                if let firstTranslation = suggestion.translations.first {
+                    Text("\(firstTranslation.languageName): \(firstTranslation.text)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .padding(12)
+            .frame(width: 200)
+            .background(Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+        }
+        .buttonStyle(.plain)
     }
 }
 

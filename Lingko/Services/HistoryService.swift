@@ -17,12 +17,14 @@ struct HistoryService {
 
     // MARK: - Create
 
-    /// Save multiple translation results as a grouped translation session
+    /// Save multiple translation results as a grouped translation session with AI-powered tagging
     func saveTranslations(
         _ results: [TranslationResult],
         sourceText: String,
-        context: ModelContext
-    ) {
+        context: ModelContext,
+        aiService: AIAssistantService? = nil,
+        tagService: TagService? = nil
+    ) async {
         guard !results.isEmpty else { return }
 
         // Encode all translation results into JSON
@@ -54,9 +56,22 @@ struct HistoryService {
 
         context.insert(savedTranslation)
 
+        // Apply AI-suggested tags if services provided
+        if let aiService = aiService, let tagService = tagService {
+            logger.info("🤖 Requesting AI tag suggestions...")
+            let suggestedTagNames = await aiService.suggestTags(for: sourceText)
+
+            if !suggestedTagNames.isEmpty {
+                logger.info("🏷️ AI suggested tags: \(suggestedTagNames.joined(separator: ", "))")
+                let tags = tagService.getOrCreateTags(byNames: suggestedTagNames, context: context)
+                savedTranslation.tags = tags
+            }
+        }
+
         do {
             try context.save()
-            logger.info("💾 Saved grouped translation: \(sourceText.prefix(30))... → \(results.count) languages")
+            let tagInfo = savedTranslation.tags?.map { $0.name }.joined(separator: ", ") ?? "none"
+            logger.info("💾 Saved translation: \(sourceText.prefix(30))... → \(results.count) languages, tags: \(tagInfo)")
         } catch {
             logger.error("❌ Failed to save translations: \(error.localizedDescription)")
         }
@@ -131,6 +146,36 @@ struct HistoryService {
             return results
         } catch {
             logger.error("❌ Failed to fetch favorites: \(error.localizedDescription)")
+            return []
+        }
+    }
+
+    /// Fetch history filtered by tags
+    func fetchHistory(filteredBy tags: [Tag], context: ModelContext) -> [SavedTranslation] {
+        guard !tags.isEmpty else {
+            return fetchHistory(context: context)
+        }
+
+        logger.debug("🏷️ Fetching history filtered by \(tags.count) tags")
+
+        let descriptor = FetchDescriptor<SavedTranslation>(
+            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
+        )
+
+        do {
+            let allHistory = try context.fetch(descriptor)
+            let tagIDs = Set(tags.map { $0.id })
+
+            // Filter translations that have ANY of the specified tags
+            let filtered = allHistory.filter { translation in
+                guard let translationTags = translation.tags else { return false }
+                return translationTags.contains { tagIDs.contains($0.id) }
+            }
+
+            logger.debug("🏷️ Found \(filtered.count) translations with specified tags")
+            return filtered
+        } catch {
+            logger.error("❌ Failed to fetch filtered history: \(error.localizedDescription)")
             return []
         }
     }
