@@ -38,27 +38,81 @@ struct TranslationService {
 
     // MARK: - Language Detection
 
-    /// Detects the dominant language in the given text with confidence score
-    func detectLanguage(for text: String) -> (language: Locale.Language?, confidence: Double) {
+    /// Detects multiple languages in the given text with confidence scores and download status
+    /// - Parameters:
+    ///   - text: The text to analyze
+    ///   - preferredLanguages: Optional set of languages to boost confidence for (e.g., user-selected languages)
+    ///   - installedLanguages: Optional set of installed/downloaded languages to check availability
+    ///   - maxResults: Maximum number of results to return (default: 5)
+    /// - Returns: Array of detected languages with confidence scores and download status, filtered to supported languages only
+    func detectLanguages(
+        for text: String,
+        preferredLanguages: Set<Locale.Language>? = nil,
+        installedLanguages: Set<Locale.Language>? = nil,
+        maxResults: Int = 5
+    ) -> [(language: Locale.Language, confidence: Double, isDownloaded: Bool)] {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             logger.debug("Empty text provided for language detection")
-            return (nil, 0.0)
+            return []
         }
 
         let recognizer = NLLanguageRecognizer()
         recognizer.processString(text)
 
-        guard let dominantLanguage = recognizer.dominantLanguage,
-              let hypotheses = recognizer.languageHypotheses(withMaximum: 1).first else {
-            logger.warning("Failed to detect language")
-            return (nil, 0.0)
+        // Get top language hypotheses
+        let hypotheses = recognizer.languageHypotheses(withMaximum: 10)
+        
+        guard !hypotheses.isEmpty else {
+            logger.warning("Failed to detect any languages")
+            return []
         }
 
-        let confidence = hypotheses.value
-        let localeLanguage = Locale.Language(identifier: dominantLanguage.rawValue)
+        // Convert to supported languages list
+        let supportedLanguageIds = Set(SupportedLanguages.allLanguages.map { $0.minimalIdentifier })
+        let preferredLanguageIds = preferredLanguages.map { Set($0.map { $0.minimalIdentifier }) }
+        let installedLanguageIds = installedLanguages.map { Set($0.map { $0.minimalIdentifier }) }
+        
+        var results: [(language: Locale.Language, confidence: Double, isDownloaded: Bool)] = []
+        
+        for (nlLanguage, confidence) in hypotheses {
+            let localeLanguage = Locale.Language(identifier: nlLanguage.rawValue)
+            let languageId = localeLanguage.minimalIdentifier
+            
+            // Only include supported languages
+            guard supportedLanguageIds.contains(languageId) else {
+                logger.debug("Filtering out unsupported language: \(languageId)")
+                continue
+            }
+            
+            // Check if language is downloaded
+            let isDownloaded = installedLanguageIds?.contains(languageId) ?? true
+            
+            // Apply confidence boost for preferred languages
+            var adjustedConfidence = confidence
+            if let preferredIds = preferredLanguageIds, preferredIds.contains(languageId) {
+                adjustedConfidence = min(1.0, confidence + 0.2)
+                logger.debug("Boosting confidence for preferred language \(languageId): \(confidence) -> \(adjustedConfidence)")
+            }
+            
+            results.append((language: localeLanguage, confidence: adjustedConfidence, isDownloaded: isDownloaded))
+        }
+        
+        // Sort by confidence (descending) and limit results
+        results.sort { $0.confidence > $1.confidence }
+        let limitedResults = Array(results.prefix(maxResults))
+        
+        logger.info("Detected \(limitedResults.count) supported languages: \(limitedResults.map { "\($0.language.minimalIdentifier)(\(String(format: "%.2f", $0.confidence)))\($0.isDownloaded ? "✓" : "⬇️")" }.joined(separator: ", "))")
+        
+        return limitedResults
+    }
 
-        logger.info("Detected language: \(dominantLanguage.rawValue) with confidence: \(confidence)")
-        return (localeLanguage, confidence)
+    /// Detects the dominant language in the given text with confidence score
+    /// - Parameter text: The text to analyze
+    /// - Returns: The most likely language and its confidence score
+    /// - Note: This method is kept for backward compatibility. Use `detectLanguages(for:preferredLanguages:installedLanguages:)` for multi-language detection.
+    func detectLanguage(for text: String) -> (language: Locale.Language?, confidence: Double) {
+        let results = detectLanguages(for: text, preferredLanguages: nil, installedLanguages: nil, maxResults: 1)
+        return results.first.map { ($0.language, $0.confidence) } ?? (nil, 0.0)
     }
 
     // MARK: - Linguistic Analysis

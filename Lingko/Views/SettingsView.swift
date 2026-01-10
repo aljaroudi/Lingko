@@ -20,6 +20,25 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                // Language Management
+                Section {
+                    Button {
+                        openTranslateSettings()
+                    } label: {
+                        HStack {
+                            Label("Download Languages", systemImage: "arrow.down.circle")
+                            Spacer()
+                            Image(systemName: "arrow.forward")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Language Management")
+                } footer: {
+                    Text("Download language packs in iOS Settings to enable offline translation")
+                }
+                
                 // Translation Settings
                 Section {
                     Toggle(isOn: $autoSaveToHistory) {
@@ -140,6 +159,20 @@ struct SettingsView: View {
 
     private var buildNumber: String {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
+    }
+    
+    private func openTranslateSettings() {
+        // Try to open iOS Translate settings
+        if let url = URL(string: "App-prefs:TRANSLATE") {
+            UIApplication.shared.open(url) { success in
+                if !success {
+                    // Fallback to general Settings if Translate-specific URL doesn't work
+                    if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(settingsUrl)
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -45,6 +45,10 @@ struct TranslationView: View {
     }
     @State private var debounceTask: Task<Void, Never>?
     @State private var detectedLanguage: String?
+    @State private var detectedLanguages: [(language: Locale.Language, confidence: Double, isDownloaded: Bool)] = []
+    @State private var selectedSourceLanguage: Locale.Language? = nil
+    @State private var showSourceLanguagePicker = false
+    @State private var installedLanguages: Set<Locale.Language> = []
     @State private var sourceRomanization: String?
     @State private var errorMessage: ErrorMessage?
     @State private var errorTrigger = UUID()
@@ -107,6 +111,19 @@ struct TranslationView: View {
                 .sheet(isPresented: $showSettings) {
                     SettingsView()
                 }
+                .sheet(isPresented: $showSourceLanguagePicker) {
+                    SourceLanguagePickerView(
+                        detectedLanguages: detectedLanguages,
+                        installedLanguages: installedLanguages,
+                        selectedSourceLanguage: $selectedSourceLanguage,
+                        onAutoDetect: {
+                            selectedSourceLanguage = nil
+                            if !inputText.isEmpty {
+                                handleTextChange(inputText)
+                            }
+                        }
+                    )
+                }
                 .sheet(isPresented: showImageTranslationBinding) {
                     // The binding guarantees selectedImage is non-nil when sheet is shown
                     if let image = selectedImage {
@@ -146,6 +163,9 @@ struct TranslationView: View {
                 .onDisappear {
                     audioService.stop()
                 }
+                .task {
+                    await loadInstalledLanguages()
+                }
                 .sensoryFeedback(.impact(weight: .light), trigger: translations.count)
                 .sensoryFeedback(.error, trigger: errorTrigger)
         }
@@ -184,14 +204,41 @@ struct TranslationView: View {
             HStack {
                 Spacer()
 
-                if let detectedLanguage {
-                    Text(detectedLanguage)
-                        .font(.caption)
+                if !detectedLanguages.isEmpty || selectedSourceLanguage != nil {
+                    Button {
+                        showSourceLanguagePicker = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            if let selectedSource = selectedSourceLanguage {
+                                Image(systemName: "hand.tap.fill")
+                                    .font(.caption2)
+                                Text(Locale.current.localizedString(forLanguageCode: selectedSource.minimalIdentifier) ?? selectedSource.minimalIdentifier)
+                                    .font(.caption)
+                            } else if let primary = detectedLanguages.first {
+                                if detectedLanguages.count > 1 {
+                                    Image(systemName: "globe")
+                                        .font(.caption2)
+                                    Text("\(detectedLanguages.count) languages")
+                                        .font(.caption)
+                                } else {
+                                    Text(Locale.current.localizedString(forLanguageCode: primary.language.minimalIdentifier) ?? primary.language.minimalIdentifier)
+                                        .font(.caption)
+                                    if primary.confidence < 0.8 {
+                                        Image(systemName: "questionmark.circle")
+                                            .font(.caption2)
+                                    }
+                                }
+                            }
+                            Image(systemName: "chevron.down")
+                                .font(.caption2)
+                        }
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color(.tertiarySystemFill))
                         .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
 
@@ -374,6 +421,8 @@ struct TranslationView: View {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             translations = []
             detectedLanguage = nil
+            detectedLanguages = []
+            selectedSourceLanguage = nil
             sourceRomanization = nil
             translationMemorySuggestions = []
             isTranslating = false
@@ -406,23 +455,65 @@ struct TranslationView: View {
         errorMessage = nil
 
         do {
-            // Detect language
-            let (language, _) = service.detectLanguage(for: text)
-            if let language {
-                detectedLanguage = Locale.current.localizedString(forLanguageCode: language.minimalIdentifier)
-                    ?? language.minimalIdentifier
+            // Detect languages with preference for user-selected languages
+            let detected = service.detectLanguages(
+                for: text,
+                preferredLanguages: selectedLanguages,
+                installedLanguages: installedLanguages,
+                maxResults: 5
+            )
+            detectedLanguages = detected
+            
+            // Determine source language with priority:
+            // 1. Manual override (if set)
+            // 2. Highest confidence language that's user-selected (doesn't need to be downloaded)
+            // 3. Highest confidence detected language
+            // Note: Source language doesn't need to be downloaded, only target languages do
+            let sourceLanguage: Locale.Language?
+            if let manual = selectedSourceLanguage {
+                sourceLanguage = manual
+            } else {
+                // Find best language that's also user-selected
+                let detectedAndSelected = detected.first { result in
+                    selectedLanguages.contains(result.language)
+                }
+                
+                if let best = detectedAndSelected {
+                    sourceLanguage = best.language
+                } else {
+                    // Fallback to any detected language
+                    sourceLanguage = detected.first?.language
+                }
+            }
+            
+            // Update display for primary detected language
+            if let primary = detected.first {
+                detectedLanguage = Locale.current.localizedString(forLanguageCode: primary.language.minimalIdentifier)
+                    ?? primary.language.minimalIdentifier
             }
 
             // Check if languages are selected
             guard !selectedLanguages.isEmpty else {
                 throw TranslationError.invalidConfiguration
             }
+            
+            // Check if we have a valid source language
+            guard let sourceLanguage = sourceLanguage else {
+                throw TranslationError.detectionFailed
+            }
+
+            // Filter target languages to only downloaded ones
+            let downloadedTargetLanguages = selectedLanguages.filter { installedLanguages.contains($0) }
+            
+            guard !downloadedTargetLanguages.isEmpty else {
+                throw TranslationError.invalidConfiguration
+            }
 
             // Perform translation with feature flags
             let results = await service.translateToAll(
                 text: text,
-                from: language,
-                to: selectedLanguages,
+                from: sourceLanguage,
+                to: downloadedTargetLanguages,
                 includeLinguisticAnalysis: includeLinguisticAnalysis,
                 includeRomanization: includeRomanization
             )
@@ -507,6 +598,27 @@ struct TranslationView: View {
             }
         }
     }
+    
+    private func loadInstalledLanguages() async {
+        // Check which languages are installed by testing against a reference language
+        let referenceLanguage = Locale.Language(identifier: "en")
+        var installed: Set<Locale.Language> = []
+        
+        for languageInfo in SupportedLanguages.all {
+            let language = languageInfo.language
+            
+            // Check if this language pair is installed
+            let isInstalled = await service.isLanguageInstalled(
+                from: referenceLanguage,
+                to: language
+            )
+            if isInstalled {
+                installed.insert(language)
+            }
+        }
+        
+        installedLanguages = installed
+    }
 }
 
 // MARK: - Translation Memory Suggestion Card
@@ -551,6 +663,256 @@ struct TranslationMemorySuggestionCard: View {
             .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Source Language Picker View
+
+struct SourceLanguagePickerView: View {
+    let detectedLanguages: [(language: Locale.Language, confidence: Double, isDownloaded: Bool)]
+    let installedLanguages: Set<Locale.Language>
+    @Binding var selectedSourceLanguage: Locale.Language?
+    let onAutoDetect: () -> Void
+    
+    @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
+    
+    private var downloadedLanguages: [LanguageInfo] {
+        SupportedLanguages.all.filter { languageInfo in
+            installedLanguages.contains(languageInfo.language)
+        }.sorted { $0.name < $1.name }
+    }
+    
+    private var notDownloadedLanguages: [LanguageInfo] {
+        SupportedLanguages.all.filter { languageInfo in
+            !installedLanguages.contains(languageInfo.language)
+        }.sorted { $0.name < $1.name }
+    }
+    
+    private var filteredDownloadedLanguages: [LanguageInfo] {
+        if searchText.isEmpty {
+            return downloadedLanguages
+        }
+        return downloadedLanguages.filter { languageInfo in
+            languageInfo.name.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+    
+    private var filteredNotDownloadedLanguages: [LanguageInfo] {
+        if searchText.isEmpty {
+            return notDownloadedLanguages
+        }
+        return notDownloadedLanguages.filter { languageInfo in
+            languageInfo.name.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                // Download more languages button
+                Section {
+                    Button {
+                        openTranslateSettings()
+                    } label: {
+                        HStack {
+                            Image(systemName: "arrow.down.circle")
+                                .foregroundStyle(.blue)
+                            Text("Download More Languages")
+                                .foregroundStyle(.blue)
+                            Spacer()
+                            Image(systemName: "arrow.forward")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+                
+                // Auto-detect option
+                Section {
+                    Button {
+                        onAutoDetect()
+                        dismiss()
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Auto-detect")
+                                    .foregroundStyle(.primary)
+                                if !detectedLanguages.isEmpty {
+                                    let downloadedDetected = detectedLanguages.filter { $0.isDownloaded }
+                                    if !downloadedDetected.isEmpty {
+                                        Text("Currently: \(downloadedDetected.map { Locale.current.localizedString(forLanguageCode: $0.language.minimalIdentifier) ?? $0.language.minimalIdentifier }.prefix(3).joined(separator: ", "))")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            
+                            Spacer()
+                            
+                            if selectedSourceLanguage == nil {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.blue)
+                                    .fontWeight(.semibold)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                } header: {
+                    Text("Detection Mode")
+                }
+                
+                // Detected languages section
+                if !detectedLanguages.isEmpty {
+                    Section {
+                        ForEach(detectedLanguages, id: \.language.minimalIdentifier) { detected in
+                            Button {
+                                if detected.isDownloaded {
+                                    selectedSourceLanguage = detected.language
+                                    dismiss()
+                                }
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(Locale.current.localizedString(forLanguageCode: detected.language.minimalIdentifier) ?? detected.language.minimalIdentifier)
+                                            .foregroundStyle(detected.isDownloaded ? .primary : .secondary)
+                                        
+                                        HStack(spacing: 4) {
+                                            ConfidenceBadge(confidence: detected.confidence)
+                                            
+                                            if !detected.isDownloaded {
+                                                Text("Download Required")
+                                                    .font(.caption2)
+                                                    .foregroundStyle(.white)
+                                                    .padding(.horizontal, 6)
+                                                    .padding(.vertical, 2)
+                                                    .background(Color.orange)
+                                                    .clipShape(Capsule())
+                                            }
+                                        }
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    if detected.isDownloaded && selectedSourceLanguage?.minimalIdentifier == detected.language.minimalIdentifier {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(.blue)
+                                            .fontWeight(.semibold)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!detected.isDownloaded)
+                            .opacity(detected.isDownloaded ? 1.0 : 0.6)
+                        }
+                    } header: {
+                        Text("Detected Languages")
+                    }
+                }
+                
+                // Downloaded languages
+                if !filteredDownloadedLanguages.isEmpty {
+                    Section {
+                        ForEach(filteredDownloadedLanguages) { languageInfo in
+                            Button {
+                                selectedSourceLanguage = languageInfo.language
+                                dismiss()
+                            } label: {
+                                HStack {
+                                    Text(languageInfo.name)
+                                        .foregroundStyle(.primary)
+                                    
+                                    Spacer()
+                                    
+                                    if selectedSourceLanguage?.minimalIdentifier == languageInfo.language.minimalIdentifier {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(.blue)
+                                            .fontWeight(.semibold)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    } header: {
+                        Text("Downloaded Languages")
+                    }
+                }
+                
+                // Not downloaded languages (text only)
+                if !filteredNotDownloadedLanguages.isEmpty {
+                    Section {
+                        ForEach(filteredNotDownloadedLanguages) { languageInfo in
+                            HStack {
+                                Text(languageInfo.name)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text("Download required")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    } header: {
+                        Text("Available After Download")
+                    }
+                }
+            }
+            .searchable(text: $searchText, prompt: "Search languages")
+            .navigationTitle("Source Language")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func openTranslateSettings() {
+        // Try to open iOS Translate settings
+        if let url = URL(string: "App-prefs:TRANSLATE") {
+            UIApplication.shared.open(url) { success in
+                if !success {
+                    // Fallback to general Settings if Translate-specific URL doesn't work
+                    if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(settingsUrl)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Confidence Badge
+
+struct ConfidenceBadge: View {
+    let confidence: Double
+    
+    private var color: Color {
+        if confidence >= 0.8 {
+            return .green
+        } else if confidence >= 0.5 {
+            return .orange
+        } else {
+            return .red
+        }
+    }
+    
+    private var label: String {
+        String(format: "%.0f%%", confidence * 100)
+    }
+    
+    var body: some View {
+        Text(label)
+            .font(.caption2)
+            .fontWeight(.semibold)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color)
+            .clipShape(Capsule())
     }
 }
 
