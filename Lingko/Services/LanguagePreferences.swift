@@ -18,51 +18,23 @@ struct LanguagePreferences {
         UserDefaults.standard.set(languageCodes, forKey: selectedLanguagesKey)
     }
 
+    /// Check if user has saved language preferences before
+    static func hasSavedPreferences() -> Bool {
+        return UserDefaults.standard.array(forKey: selectedLanguagesKey) != nil
+    }
+
     /// Load selected languages from UserDefaults
     static func loadSelectedLanguages() -> Set<Locale.Language> {
         guard let languageCodes = UserDefaults.standard.array(forKey: selectedLanguagesKey) as? [String] else {
-            // Return default languages if none saved
-            return defaultLanguages()
+            // Return empty set - will be populated with downloaded languages on first launch
+            return []
         }
 
         // Validate codes against supported list
         let validLanguages = SupportedLanguages.validate(codes: languageCodes)
 
-        // Ensure minimum count
-        if validLanguages.count >= minimumLanguageCount {
-            return Set(validLanguages)
-        } else {
-            // Not enough valid languages, return defaults
-            return defaultLanguages()
-        }
-    }
-
-    /// Default languages when nothing is saved
-    /// Includes device language if supported, plus popular languages
-    static func defaultLanguages() -> Set<Locale.Language> {
-        var defaults: Set<Locale.Language> = []
-
-        // Add device language if supported
-        if let deviceLang = SupportedLanguages.deviceLanguage {
-            defaults.insert(deviceLang)
-        }
-
-        // Add common languages
-        let commonLanguages = [
-            Locale.Language(identifier: "es"), // Spanish
-            Locale.Language(identifier: "fr"), // French
-            Locale.Language(identifier: "de"), // German
-            Locale.Language(identifier: "en")  // English
-        ]
-
-        for language in commonLanguages {
-            defaults.insert(language)
-            if defaults.count >= 3 {
-                break
-            }
-        }
-
-        return defaults
+        // Return validated languages (even if below minimum - will be handled in UI)
+        return Set(validLanguages)
     }
 
     /// Check if removing a language would violate minimum requirement

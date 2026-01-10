@@ -16,9 +16,7 @@ struct TranslationView: View {
     @State private var audioService = AudioService()
     @State private var aiService = AIAssistantService()
     @State private var historyService = HistoryService()
-    @State private var translationMemoryService = TranslationMemoryService()
     @State private var tagService = TagService()
-    @State private var connectivityService = ConnectivityService()
     @Binding var inputText: String
     @State private var translations: [TranslationResult] = []
     @State private var selectedLanguages: Set<Locale.Language> = LanguagePreferences.loadSelectedLanguages()
@@ -54,7 +52,6 @@ struct TranslationView: View {
     @State private var errorTrigger = UUID()
     @FocusState private var isInputFocused: Bool
     @AppStorage("defaultSpeechRate") private var speechRate: Double = 0.5
-    @State private var translationMemorySuggestions: [TranslationMemorySuggestion] = []
 
     // Feature toggles
     @AppStorage("includeLinguisticAnalysis") private var includeLinguisticAnalysis: Bool = false
@@ -174,20 +171,8 @@ struct TranslationView: View {
     @ViewBuilder
     private var mainContent: some View {
         VStack(spacing: 0) {
-            // Offline warning
-            if !connectivityService.isConnected {
-                offlineWarningBanner
-            }
-
             // Input section
             inputSection
-                .padding()
-                .background(Color(.systemGroupedBackground))
-
-            // Translation memory suggestions
-            if !translationMemorySuggestions.isEmpty {
-                translationMemorySuggestionsSection
-            }
 
             Divider()
 
@@ -285,6 +270,7 @@ struct TranslationView: View {
                 }
             }
         }
+        .padding()
     }
 
     // MARK: - Results Section
@@ -330,66 +316,6 @@ struct TranslationView: View {
         }
     }
 
-    // MARK: - Offline Warning Banner
-
-    @ViewBuilder
-    private var offlineWarningBanner: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "wifi.slash")
-                .foregroundStyle(.orange)
-            Text("Offline - Language packs may be unavailable")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(Color.orange.opacity(0.1))
-        .transition(.move(edge: .top).combined(with: .opacity))
-    }
-
-    // MARK: - Translation Memory Suggestions Section
-
-    @ViewBuilder
-    private var translationMemorySuggestionsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "lightbulb.fill")
-                    .foregroundStyle(.yellow)
-                    .font(.caption)
-
-                Text("Similar Translations")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Button {
-                    translationMemorySuggestions = []
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding(.horizontal)
-            .padding(.top, 8)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(translationMemorySuggestions) { suggestion in
-                        TranslationMemorySuggestionCard(suggestion: suggestion) {
-                            applySuggestion(suggestion)
-                        }
-                    }
-                }
-                .padding(.horizontal)
-            }
-            .padding(.bottom, 8)
-        }
-        .background(Color(.secondarySystemGroupedBackground))
-    }
-
     // MARK: - Language Selection Button
 
     @ViewBuilder
@@ -424,16 +350,9 @@ struct TranslationView: View {
             detectedLanguages = []
             selectedSourceLanguage = nil
             sourceRomanization = nil
-            translationMemorySuggestions = []
             isTranslating = false
             return
         }
-
-        // Fetch translation memory suggestions immediately (no debounce)
-        translationMemorySuggestions = translationMemoryService.findSimilarTranslations(
-            for: text,
-            context: modelContext
-        )
 
         // Create new debounced task for translation
         debounceTask = Task {
@@ -504,9 +423,13 @@ struct TranslationView: View {
 
             // Filter target languages to only downloaded ones
             let downloadedTargetLanguages = selectedLanguages.filter { installedLanguages.contains($0) }
-            
+
             guard !downloadedTargetLanguages.isEmpty else {
-                throw TranslationError.invalidConfiguration
+                // Collect missing language names
+                let missingLanguages = selectedLanguages.compactMap { language in
+                    Locale.current.localizedString(forLanguageCode: language.minimalIdentifier)
+                }
+                throw TranslationError.missingLanguagePacks(missingLanguages)
             }
 
             // Perform translation with feature flags
@@ -553,17 +476,6 @@ struct TranslationView: View {
         }
     }
 
-    private func applySuggestion(_ suggestion: TranslationMemorySuggestion) {
-        // Apply the suggested text
-        inputText = suggestion.sourceText
-
-        // Clear translation memory suggestions after applying
-        translationMemorySuggestions = []
-
-        // Trigger translation
-        handleTextChange(suggestion.sourceText)
-    }
-
     private func loadImage(from item: PhotosPickerItem?) async {
         guard let item = item else { return }
 
@@ -603,10 +515,10 @@ struct TranslationView: View {
         // Check which languages are installed by testing against a reference language
         let referenceLanguage = Locale.Language(identifier: "en")
         var installed: Set<Locale.Language> = []
-        
+
         for languageInfo in SupportedLanguages.all {
             let language = languageInfo.language
-            
+
             // Check if this language pair is installed
             let isInstalled = await service.isLanguageInstalled(
                 from: referenceLanguage,
@@ -616,53 +528,19 @@ struct TranslationView: View {
                 installed.insert(language)
             }
         }
-        
-        installedLanguages = installed
-    }
-}
 
-// MARK: - Translation Memory Suggestion Card
-
-struct TranslationMemorySuggestionCard: View {
-    let suggestion: TranslationMemorySuggestion
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Image(systemName: suggestion.confidenceIcon)
-                        .font(.caption2)
-                        .foregroundStyle(suggestion.isHighConfidence ? .green : .orange)
-
-                    Text(suggestion.similarityPercentage)
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-
-                    Spacer()
-                }
-
-                Text(suggestion.sourceText)
-                    .font(.subheadline)
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-
-                if let firstTranslation = suggestion.translations.first {
-                    Text("\(firstTranslation.languageName): \(firstTranslation.text)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-            .padding(12)
-            .frame(width: 200)
-            .background(Color(.systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+        // Always include system language (it's always downloaded even if not detected)
+        if let systemLang = SupportedLanguages.deviceLanguage {
+            installed.insert(systemLang)
         }
-        .buttonStyle(.plain)
+
+        installedLanguages = installed
+
+        // Auto-select all downloaded languages on first launch
+        if !LanguagePreferences.hasSavedPreferences() {
+            selectedLanguages = installed
+            LanguagePreferences.saveSelectedLanguages(installed)
+        }
     }
 }
 
