@@ -12,7 +12,7 @@ struct SettingsView: View {
 
     @AppStorage("defaultSpeechRate") private var defaultSpeechRate: Double = 0.5
     @AppStorage("autoSaveToHistory") private var autoSaveToHistory: Bool = true
-    @AppStorage("includeLinguisticAnalysis") private var includeLinguisticAnalysis: Bool = false
+    @AppStorage("includeLinguisticAnalysis") private var includeLinguisticAnalysis: Bool = true
     @AppStorage("includeRomanization") private var includeRomanization: Bool = true
     @AppStorage("reduceMotion") private var reduceMotion: Bool = false
     @AppStorage("hapticFeedback") private var hapticFeedback: Bool = true
@@ -46,7 +46,12 @@ struct SettingsView: View {
                     }
 
                     Toggle(isOn: $includeLinguisticAnalysis) {
-                        Label("Linguistic Analysis", systemImage: "brain")
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("Linguistic Analysis", systemImage: "brain")
+                            Text("Show parts of speech and named entities")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     Toggle(isOn: $includeRomanization) {
@@ -162,16 +167,8 @@ struct SettingsView: View {
     }
     
     private func openTranslateSettings() {
-        // Try to open iOS Translate settings
-        if let url = URL(string: "App-prefs:TRANSLATE") {
-            UIApplication.shared.open(url) { success in
-                if !success {
-                    // Fallback to general Settings if Translate-specific URL doesn't work
-                    if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(settingsUrl)
-                    }
-                }
-            }
+        if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(settingsUrl)
         }
     }
 }

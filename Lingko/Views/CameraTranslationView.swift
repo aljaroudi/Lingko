@@ -201,7 +201,6 @@ struct CameraTranslationView: View {
             text: text,
             from: sourceLanguage,
             to: downloadedTargetLanguages,
-            includeLinguisticAnalysis: false,
             includeRomanization: true
         )
 

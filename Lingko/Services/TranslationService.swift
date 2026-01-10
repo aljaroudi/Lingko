@@ -36,6 +36,19 @@ struct TranslationService {
         await languageAvailability.status(from: source, to: target)
     }
 
+    // MARK: - Linguistic Analysis Support
+
+    /// Check if a language supports linguistic analysis (POS tagging and named entity recognition)
+    func supportsLinguisticAnalysis(for language: Locale.Language) -> Bool {
+        let nlLanguage = NLLanguage(rawValue: language.minimalIdentifier)
+
+        // Check if the language supports both lexical class (POS) and name type (NER) tag schemes
+        let supportsLexicalClass = NLTagger.availableTagSchemes(for: .word, language: nlLanguage).contains(.lexicalClass)
+        let supportsNameType = NLTagger.availableTagSchemes(for: .word, language: nlLanguage).contains(.nameType)
+
+        return supportsLexicalClass && supportsNameType
+    }
+
     // MARK: - Language Detection
 
     /// Detects multiple languages in the given text with confidence scores and download status
@@ -130,8 +143,7 @@ struct TranslationService {
             .tokenType,
             .lexicalClass,      // POS tagging
             .lemma,             // Base forms
-            .nameType,          // Named entity recognition
-            .sentimentScore     // Sentiment analysis
+            .nameType           // Named entity recognition
         ])
 
         tagger.string = text
@@ -141,9 +153,6 @@ struct TranslationService {
             let nlLanguage = NLLanguage(rawValue: language.minimalIdentifier)
             tagger.setLanguage(nlLanguage, range: text.startIndex..<text.endIndex)
         }
-
-        // Extract sentiment
-        let sentiment = extractSentiment(from: text, tagger: tagger)
 
         // Extract named entities
         let entities = extractEntities(from: text, tagger: tagger)
@@ -155,10 +164,9 @@ struct TranslationService {
         let (detectedLanguage, confidence) = detectLanguage(for: text)
         let nlLanguage = detectedLanguage.flatMap { NLLanguage(rawValue: $0.minimalIdentifier) }
 
-        logger.info("✅ Linguistic analysis complete: \(entities.count) entities, \(tokens.count) tokens, sentiment: \(sentiment?.description ?? "none")")
+        logger.info("✅ Linguistic analysis complete: \(entities.count) entities, \(tokens.count) tokens")
 
         return LinguisticAnalysis(
-            sentiment: sentiment,
             entities: entities,
             tokens: tokens,
             dominantLanguage: nlLanguage,
@@ -167,17 +175,6 @@ struct TranslationService {
     }
 
     // MARK: - Private Linguistic Analysis Helpers
-
-    private func extractSentiment(from text: String, tagger: NLTagger) -> Double? {
-        let (tag, _) = tagger.tag(at: text.startIndex, unit: .paragraph, scheme: .sentimentScore)
-
-        if let tag, let score = Double(tag.rawValue) {
-            logger.debug("Sentiment score: \(score)")
-            return score
-        }
-
-        return nil
-    }
 
     private func extractEntities(from text: String, tagger: NLTagger) -> [NamedEntity] {
         var entities: [NamedEntity] = []
@@ -239,9 +236,9 @@ struct TranslationService {
         text: String,
         from sourceLanguage: Locale.Language?,
         to targetLanguages: Set<Locale.Language>,
-        includeLinguisticAnalysis: Bool = false,
         includeRomanization: Bool = true,
-        romanizationService: RomanizationService = RomanizationService()
+        romanizationService: RomanizationService = RomanizationService(),
+        onEachResult: (@MainActor @Sendable (TranslationResult) async -> Void)? = nil
     ) async -> [TranslationResult] {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             logger.debug("Empty text provided for translation")
@@ -293,7 +290,6 @@ struct TranslationService {
                         to: targetLanguage,
                         detectionConfidence: confidence,
                         includeRomanization: includeRomanization,
-                        includeLinguisticAnalysis: includeLinguisticAnalysis,
                         romanizationService: romanizationService,
                         sourceRomanization: sourceRomanization
                     )
@@ -306,6 +302,10 @@ struct TranslationService {
             for await result in group {
                 if let result {
                     results.append(result)
+                    // Call the completion handler immediately for each result
+                    if let handler = onEachResult {
+                        await handler(result)
+                    }
                 } else {
                     failedCount += 1
                 }
@@ -334,7 +334,6 @@ struct TranslationService {
         to targetLanguage: Locale.Language,
         detectionConfidence: Double,
         includeRomanization: Bool,
-        includeLinguisticAnalysis: Bool,
         romanizationService: RomanizationService,
         sourceRomanization: String?
     ) async -> TranslationResult? {
@@ -356,11 +355,6 @@ struct TranslationService {
                 romanizationSystem = RomanizationSystem.defaultSystem(for: targetLanguage)
             }
 
-            // Perform linguistic analysis on translated text if requested
-            let linguisticAnalysis = includeLinguisticAnalysis
-                ? analyzeLinguistics(for: response.targetText, language: targetLanguage)
-                : nil
-
             return TranslationResult(
                 language: targetLanguage,
                 sourceLanguage: sourceLanguage,
@@ -369,7 +363,7 @@ struct TranslationService {
                 romanization: targetRomanization,
                 sourceRomanization: sourceRomanization,
                 romanizationSystem: romanizationSystem,
-                linguisticAnalysis: linguisticAnalysis
+                linguisticAnalysis: nil
             )
         } catch {
             logger.error("Translation failed for \(targetLanguage.minimalIdentifier): \(error.localizedDescription)")

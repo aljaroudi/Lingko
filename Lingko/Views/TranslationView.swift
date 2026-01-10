@@ -21,6 +21,7 @@ struct TranslationView: View {
     @State private var translations: [TranslationResult] = []
     @State private var selectedLanguages: Set<Locale.Language> = LanguagePreferences.loadSelectedLanguages()
     @State private var isTranslating = false
+    @State private var loadingLanguages: Set<Locale.Language> = []
     @State private var showLanguageSelection = false
     @State private var showImageTranslation = false
     @State private var showSettings = false
@@ -45,6 +46,7 @@ struct TranslationView: View {
     @State private var detectedLanguage: String?
     @State private var detectedLanguages: [(language: Locale.Language, confidence: Double, isDownloaded: Bool)] = []
     @State private var selectedSourceLanguage: Locale.Language? = nil
+    @State private var currentSourceLanguage: Locale.Language? = nil
     @State private var showSourceLanguagePicker = false
     @State private var installedLanguages: Set<Locale.Language> = []
     @State private var sourceRomanization: String?
@@ -54,11 +56,10 @@ struct TranslationView: View {
     @AppStorage("defaultSpeechRate") private var speechRate: Double = 0.5
 
     // Feature toggles
-    @AppStorage("includeLinguisticAnalysis") private var includeLinguisticAnalysis: Bool = false
     @AppStorage("includeRomanization") private var includeRomanization: Bool = true
     @AppStorage("autoSaveToHistory") private var autoSaveToHistory: Bool = true
 
-    private let debounceDelay: Duration = .milliseconds(500)
+    private let debounceDelay: Duration = .milliseconds(300)
 
     init(initialText: Binding<String>) {
         _inputText = initialText
@@ -141,6 +142,15 @@ struct TranslationView: View {
                 .onChange(of: selectedLanguages) { _, newLanguages in
                     LanguagePreferences.saveSelectedLanguages(newLanguages)
                 }
+                .onChange(of: selectedSourceLanguage) { _, newLanguage in
+                    // Update current source language when manually selected
+                    if let newLanguage = newLanguage {
+                        currentSourceLanguage = newLanguage
+                    } else if !inputText.isEmpty {
+                        // If auto-detect is selected, trigger translation to recalculate
+                        handleTextChange(inputText)
+                    }
+                }
                 .onChange(of: selectedPhotoItem) { oldItem, newItem in
                     // Clear state when picker is dismissed without selection
                     if newItem == nil {
@@ -189,30 +199,23 @@ struct TranslationView: View {
             HStack {
                 Spacer()
 
-                if !detectedLanguages.isEmpty || selectedSourceLanguage != nil {
+                if let sourceLanguage = currentSourceLanguage {
                     Button {
                         showSourceLanguagePicker = true
                     } label: {
                         HStack(spacing: 4) {
-                            if let selectedSource = selectedSourceLanguage {
+                            if selectedSourceLanguage != nil {
                                 Image(systemName: "hand.tap.fill")
                                     .font(.caption2)
-                                Text(Locale.current.localizedString(forLanguageCode: selectedSource.minimalIdentifier) ?? selectedSource.minimalIdentifier)
-                                    .font(.caption)
-                            } else if let primary = detectedLanguages.first {
-                                if detectedLanguages.count > 1 {
-                                    Image(systemName: "globe")
-                                        .font(.caption2)
-                                    Text("\(detectedLanguages.count) languages")
-                                        .font(.caption)
-                                } else {
-                                    Text(Locale.current.localizedString(forLanguageCode: primary.language.minimalIdentifier) ?? primary.language.minimalIdentifier)
-                                        .font(.caption)
-                                    if primary.confidence < 0.8 {
-                                        Image(systemName: "questionmark.circle")
-                                            .font(.caption2)
-                                    }
-                                }
+                            }
+                            Text(Locale.current.localizedString(forLanguageCode: sourceLanguage.minimalIdentifier) ?? sourceLanguage.minimalIdentifier)
+                                .font(.caption)
+                            // Show confidence indicator if low confidence and not manually selected
+                            if selectedSourceLanguage == nil,
+                               let detected = detectedLanguages.first(where: { $0.language == sourceLanguage }),
+                               detected.confidence < 0.8 {
+                                Image(systemName: "questionmark.circle")
+                                    .font(.caption2)
                             }
                             Image(systemName: "chevron.down")
                                 .font(.caption2)
@@ -259,16 +262,6 @@ struct TranslationView: View {
                         .textSelection(.enabled)
                 }
             }
-
-            if isTranslating {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Translating...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
         }
         .padding()
     }
@@ -277,25 +270,20 @@ struct TranslationView: View {
 
     @ViewBuilder
     private var resultsSection: some View {
-        if isTranslating {
-            LoadingStateView(style: .skeleton, count: min(selectedLanguages.count, 5))
-                .transition(.opacity.combined(with: .scale(scale: 0.95)))
-        } else if selectedLanguages.isEmpty {
+        if selectedLanguages.isEmpty {
             EmptyStateView(
                 configuration: .noLanguagesSelected {
                     showLanguageSelection = true
                 }
             )
             .transition(.opacity)
-        } else if translations.isEmpty && !inputText.isEmpty {
-            EmptyStateView(configuration: .translationEmpty)
-                .transition(.opacity)
-        } else if translations.isEmpty {
+        } else if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             EmptyStateView(configuration: .translationEmpty)
                 .transition(.opacity)
         } else {
             ScrollView {
                 LazyVStack(spacing: 16) {
+                    // Show completed translations
                     ForEach(translations) { result in
                         TranslationResultRow(
                             result: result,
@@ -307,6 +295,18 @@ struct TranslationView: View {
                             insertion: .scale(scale: 0.9).combined(with: .opacity),
                             removal: .opacity
                         ))
+                    }
+
+                    // Show skeleton loaders for languages currently being translated
+                    ForEach(Array(loadingLanguages.sorted(by: { l1, l2 in
+                        (Locale.current.localizedString(forLanguageCode: l1.minimalIdentifier) ?? l1.minimalIdentifier) <
+                        (Locale.current.localizedString(forLanguageCode: l2.minimalIdentifier) ?? l2.minimalIdentifier)
+                    })), id: \.minimalIdentifier) { language in
+                        SkeletonCard()
+                            .transition(.asymmetric(
+                                insertion: .scale(scale: 0.9).combined(with: .opacity),
+                                removal: .opacity
+                            ))
                     }
                 }
                 .padding()
@@ -349,8 +349,10 @@ struct TranslationView: View {
             detectedLanguage = nil
             detectedLanguages = []
             selectedSourceLanguage = nil
+            currentSourceLanguage = nil
             sourceRomanization = nil
             isTranslating = false
+            loadingLanguages = []
             return
         }
 
@@ -421,6 +423,9 @@ struct TranslationView: View {
                 throw TranslationError.detectionFailed
             }
 
+            // Update current source language for UI display
+            currentSourceLanguage = sourceLanguage
+
             // Filter target languages to only downloaded ones
             let downloadedTargetLanguages = selectedLanguages.filter { installedLanguages.contains($0) }
 
@@ -432,25 +437,44 @@ struct TranslationView: View {
                 throw TranslationError.missingLanguagePacks(missingLanguages)
             }
 
-            // Perform translation with feature flags
+            // Set loading state for all target languages (excluding source)
+            loadingLanguages = downloadedTargetLanguages.filter { $0 != sourceLanguage }
+
+            // Clear old translations to prepare for new ones
+            translations = []
+
+            // Perform translation with feature flags and progressive updates
             let results = await service.translateToAll(
                 text: text,
                 from: sourceLanguage,
                 to: downloadedTargetLanguages,
-                includeLinguisticAnalysis: includeLinguisticAnalysis,
-                includeRomanization: includeRomanization
+                includeRomanization: includeRomanization,
+                onEachResult: { @MainActor result in
+                    // Add or update translation as it arrives
+                    if let index = translations.firstIndex(where: { $0.language == result.language }) {
+                        translations[index] = result
+                    } else {
+                        translations.append(result)
+                    }
+
+                    // Remove from loading set
+                    loadingLanguages.remove(result.language)
+
+                    // Extract source romanization from first result if available
+                    if includeRomanization && sourceRomanization == nil {
+                        sourceRomanization = result.sourceRomanization
+                    }
+                }
             )
 
-            // Extract source romanization from first result if available
-            if includeRomanization, let firstResult = results.first {
+            // Fallback: extract source romanization if not yet set
+            if includeRomanization, sourceRomanization == nil, let firstResult = results.first {
                 sourceRomanization = firstResult.sourceRomanization
-            } else {
-                sourceRomanization = nil
             }
 
-            // Update UI
-            translations = results
+            // Clear loading state
             isTranslating = false
+            loadingLanguages = []
 
             // Auto-save to history with AI-powered tagging
             if autoSaveToHistory && !results.isEmpty {
@@ -464,6 +488,7 @@ struct TranslationView: View {
             }
         } catch {
             isTranslating = false
+            loadingLanguages = []
             errorMessage = ErrorMessage.from(error)
             errorTrigger = UUID()
         }
