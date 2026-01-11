@@ -14,5 +14,6 @@ data class TranslationUiState(
     ),
     val translations: List<TranslationResult> = emptyList(),
     val isTranslating: Boolean = false,
+    val showRomanization: Boolean = true,
     val error: String? = null
 )

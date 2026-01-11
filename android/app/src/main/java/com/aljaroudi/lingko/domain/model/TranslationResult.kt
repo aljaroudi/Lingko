@@ -7,6 +7,7 @@ data class TranslationResult(
     val language: Language,
     val sourceLanguage: Language?,
     val translation: String,
+    val romanization: String? = null,
     val detectionConfidence: Float,
     val timestamp: Long = System.currentTimeMillis()
 )

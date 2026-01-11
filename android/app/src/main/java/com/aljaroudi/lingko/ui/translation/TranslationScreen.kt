@@ -72,6 +72,24 @@ fun TranslationScreen(
                 )
             }
 
+            // Romanization toggle
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Show Romanization",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Switch(
+                    checked = uiState.showRomanization,
+                    onCheckedChange = { viewModel.toggleRomanization() }
+                )
+            }
+
             HorizontalDivider()
 
             // Translation results area
@@ -109,6 +127,7 @@ fun TranslationScreen(
                         ) { result ->
                             TranslationResultCard(
                                 result = result,
+                                showRomanization = uiState.showRomanization,
                                 onSpeak = { viewModel.speak(result) },
                                 onCopy = { viewModel.copyToClipboard(result) }
                             )

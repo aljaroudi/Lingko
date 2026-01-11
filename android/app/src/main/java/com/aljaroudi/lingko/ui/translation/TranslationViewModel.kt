@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aljaroudi.lingko.data.repository.RomanizationRepository
 import com.aljaroudi.lingko.data.repository.TranslationRepository
 import com.aljaroudi.lingko.domain.model.Language
 import com.aljaroudi.lingko.domain.model.TranslationResult
@@ -21,6 +22,7 @@ import javax.inject.Inject
 @HiltViewModel
 class TranslationViewModel @Inject constructor(
     private val translationRepository: TranslationRepository,
+    private val romanizationRepository: RomanizationRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -79,9 +81,19 @@ class TranslationViewModel @Inject constructor(
             from = sourceLanguage.language,
             toLanguages = _uiState.value.selectedTargetLanguages
         ).collect { result ->
-            results.add(result)
-            _uiState.update { 
-                it.copy(translations = results.sortedBy { r -> r.language.displayName }) 
+            // Add romanization if needed
+            val withRomanization = if (result.language.script.needsRomanization) {
+                result.copy(
+                    romanization = romanizationRepository.romanize(
+                        result.translation,
+                        result.language
+                    )
+                )
+            } else result
+
+            results.add(withRomanization)
+            _uiState.update {
+                it.copy(translations = results.sortedBy { r -> r.language.displayName })
             }
         }
 
@@ -116,6 +128,10 @@ class TranslationViewModel @Inject constructor(
     fun speak(result: TranslationResult) {
         // Placeholder for Phase 4: Text-to-Speech
         // Will be implemented when AudioRepository is added
+    }
+
+    fun toggleRomanization() {
+        _uiState.update { it.copy(showRomanization = !it.showRomanization) }
     }
 
     override fun onCleared() {

@@ -25,6 +25,16 @@ enum class Language(
     POLISH("pl", "Polish", "Polski", Script.LATIN, TranslateLanguage.POLISH),
     TURKISH("tr", "Turkish", "Türkçe", Script.LATIN, TranslateLanguage.TURKISH);
 
+    val defaultRomanizationSystem: RomanizationSystem
+        get() = when (script) {
+            Script.CHINESE -> RomanizationSystem.PINYIN_WITH_TONES
+            Script.JAPANESE -> RomanizationSystem.ROMAJI_HEPBURN
+            Script.KOREAN -> RomanizationSystem.KOREAN_REVISED
+            Script.ARABIC -> RomanizationSystem.ARABIC_ALA_LC
+            Script.CYRILLIC -> RomanizationSystem.CYRILLIC_BGN_PCGN
+            else -> RomanizationSystem.LATIN_ANY
+        }
+
     companion object {
         fun fromCode(code: String): Language? = entries.find { it.code == code }
 

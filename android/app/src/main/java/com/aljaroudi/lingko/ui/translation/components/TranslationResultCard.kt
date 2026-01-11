@@ -3,14 +3,18 @@ package com.aljaroudi.lingko.ui.translation.components
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.aljaroudi.lingko.domain.model.TranslationResult
 
 @Composable
 fun TranslationResultCard(
     result: TranslationResult,
+    showRomanization: Boolean,
     onSpeak: () -> Unit,
     onCopy: () -> Unit,
     modifier: Modifier = Modifier
@@ -38,12 +42,30 @@ fun TranslationResultCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Translation
-            Text(
-                text = result.translation,
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.fillMaxWidth()
-            )
+            // Romanization (if available and enabled)
+            if (showRomanization && result.romanization != null) {
+                Text(
+                    text = result.romanization,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            // Translation with RTL support
+            CompositionLocalProvider(
+                LocalLayoutDirection provides if (result.language.script.isRTL) {
+                    LayoutDirection.Rtl
+                } else {
+                    LayoutDirection.Ltr
+                }
+            ) {
+                Text(
+                    text = result.translation,
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 

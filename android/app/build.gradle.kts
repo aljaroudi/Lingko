@@ -67,6 +67,9 @@ dependencies {
     // Coroutines
     implementation(libs.kotlinx.coroutines.play.services)
 
+    // ICU4J for romanization
+    implementation(libs.icu4j)
+
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
