@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Label
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -13,6 +14,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aljaroudi.lingko.domain.model.TranslationGroup
+import com.aljaroudi.lingko.ui.tags.TagChip
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -23,6 +25,7 @@ fun HistoryItem(
     group: TranslationGroup,
     onFavoriteToggle: () -> Unit,
     onDelete: () -> Unit,
+    onEditTags: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val dateFormatter = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
@@ -66,7 +69,7 @@ fun HistoryItem(
                     .fillMaxWidth()
                     .padding(16.dp)
             ) {
-                // Header with source language and favorite button
+                // Header with source language and action buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -78,24 +81,34 @@ fun HistoryItem(
                         color = MaterialTheme.colorScheme.primary
                     )
 
-                    IconButton(onClick = onFavoriteToggle) {
-                        Icon(
-                            imageVector = if (group.isFavorite) {
-                                Icons.Default.Favorite
-                            } else {
-                                Icons.Default.FavoriteBorder
-                            },
-                            contentDescription = if (group.isFavorite) {
-                                "Remove from favorites"
-                            } else {
-                                "Add to favorites"
-                            },
-                            tint = if (group.isFavorite) {
-                                MaterialTheme.colorScheme.error
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-                        )
+                    Row {
+                        IconButton(onClick = onEditTags) {
+                            Icon(
+                                imageVector = Icons.Default.Label,
+                                contentDescription = "Edit tags",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        
+                        IconButton(onClick = onFavoriteToggle) {
+                            Icon(
+                                imageVector = if (group.isFavorite) {
+                                    Icons.Default.Favorite
+                                } else {
+                                    Icons.Default.FavoriteBorder
+                                },
+                                contentDescription = if (group.isFavorite) {
+                                    "Remove from favorites"
+                                } else {
+                                    "Add to favorites"
+                                },
+                                tint = if (group.isFavorite) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        }
                     }
                 }
 
@@ -158,6 +171,30 @@ fun HistoryItem(
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
+
+                // Tags
+                if (group.tags.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        group.tags.take(3).forEach { tag ->
+                            TagChip(tag = tag)
+                        }
+                        if (group.tags.size > 3) {
+                            Text(
+                                text = "+${group.tags.size - 3}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .align(Alignment.CenterVertically)
+                                    .padding(start = 4.dp)
+                            )
+                        }
+                    }
+                }
 
                 // Timestamp
                 Text(

@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.navigation.NavHostController
@@ -23,9 +24,41 @@ sealed class Screen(val route: String) {
 
 @Composable
 fun NavGraph(
-    navController: NavHostController = rememberNavController()
+    navController: NavHostController = rememberNavController(),
+    sharedText: String? = null,
+    shortcutAction: String? = null,
+    onSharedTextConsumed: () -> Unit = {},
+    onShortcutActionConsumed: () -> Unit = {}
 ) {
     val onTextExtractedCallback = remember { mutableStateOf<((String) -> Unit)?>(null) }
+
+    // Handle shared text
+    LaunchedEffect(sharedText) {
+        sharedText?.let { text ->
+            onTextExtractedCallback.value?.invoke(text)
+            onSharedTextConsumed()
+        }
+    }
+
+    // Handle shortcut actions
+    LaunchedEffect(shortcutAction) {
+        shortcutAction?.let { action ->
+            when (action) {
+                "com.aljaroudi.lingko.QUICK_TRANSLATE" -> {
+                    navController.navigate(Screen.Translation.route) {
+                        popUpTo(Screen.Translation.route) { inclusive = true }
+                    }
+                }
+                "com.aljaroudi.lingko.HISTORY" -> {
+                    navController.navigate(Screen.History.route)
+                }
+                "com.aljaroudi.lingko.IMAGE_TRANSLATE" -> {
+                    navController.navigate(Screen.ImageTranslation.route)
+                }
+            }
+            onShortcutActionConsumed()
+        }
+    }
 
     NavHost(
         navController = navController,

@@ -13,7 +13,8 @@ import javax.inject.Singleton
 
 @Singleton
 class HistoryRepository @Inject constructor(
-    private val dao: TranslationHistoryDao
+    private val dao: TranslationHistoryDao,
+    private val tagRepository: TagRepository
 ) {
     fun getRecentTranslations(limit: Int = 100): Flow<List<TranslationGroup>> {
         return dao.getRecentTranslations(limit).map { entities ->
@@ -38,6 +39,7 @@ class HistoryRepository @Inject constructor(
             .groupBy { it.groupId }
             .map { (groupId, groupEntities) ->
                 val first = groupEntities.first()
+                // Tags will be empty for now - we'll fetch them separately when needed
                 TranslationGroup(
                     groupId = groupId,
                     timestamp = first.timestamp,
@@ -50,7 +52,8 @@ class HistoryRepository @Inject constructor(
                             romanization = entity.romanization
                         )
                     },
-                    isFavorite = groupEntities.any { it.isFavorite }
+                    isFavorite = groupEntities.any { it.isFavorite },
+                    tags = emptyList() // Tags loaded separately in ViewModel
                 )
             }
             .sortedByDescending { it.timestamp }

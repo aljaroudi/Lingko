@@ -6,7 +6,8 @@ data class TranslationGroup(
     val sourceText: String,
     val sourceLanguage: Language?,
     val translations: List<GroupedTranslationItem>,
-    val isFavorite: Boolean
+    val isFavorite: Boolean,
+    val tags: List<Tag> = emptyList()
 )
 
 data class GroupedTranslationItem(

@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import com.aljaroudi.lingko.data.local.LingkoDatabase
+import com.aljaroudi.lingko.data.local.TagDao
 import com.aljaroudi.lingko.data.local.TranslationHistoryDao
 import dagger.Module
 import dagger.Provides
@@ -28,6 +29,7 @@ object AppModule {
             LingkoDatabase::class.java,
             "lingko_db"
         )
+            .addMigrations(LingkoDatabase.MIGRATION_2_3)
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -35,6 +37,11 @@ object AppModule {
     @Provides
     fun provideTranslationHistoryDao(db: LingkoDatabase): TranslationHistoryDao {
         return db.translationHistoryDao()
+    }
+    
+    @Provides
+    fun provideTagDao(db: LingkoDatabase): TagDao {
+        return db.tagDao()
     }
 
     @Provides

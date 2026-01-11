@@ -47,8 +47,8 @@ fun TranslationResultCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Romanization (if available and enabled)
-            if (showRomanization && result.romanization != null) {
+            // Romanization (if available)
+            if (result.romanization != null) {
                 Text(
                     text = result.romanization,
                     style = MaterialTheme.typography.bodyMedium,

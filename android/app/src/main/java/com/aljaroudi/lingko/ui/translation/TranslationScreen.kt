@@ -1,11 +1,6 @@
 package com.aljaroudi.lingko.ui.translation
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,7 +16,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.navigation.compose.rememberNavController
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -87,51 +81,23 @@ fun TranslationScreen(
                 .imePadding()
         ) {
             // Input field
-            OutlinedTextField(
+            TextField(
                 value = uiState.inputText,
                 onValueChange = viewModel::onTextChange,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
+                    .fillMaxWidth(),
                 placeholder = { Text(stringResource(R.string.placeholder_enter_text)) },
                 minLines = 3,
-                maxLines = 6,
-                supportingText = {
-                    uiState.sourceLanguage?.let { detected ->
-                        Text(stringResource(R.string.label_detected, detected.language.displayName))
-                    }
-                }
+                maxLines = 6
             )
-
-            // Selected languages display
-            AnimatedVisibility(
-                visible = uiState.selectedTargetLanguages.isNotEmpty(),
-                enter = fadeIn() + slideInVertically(),
-                exit = fadeOut() + slideOutVertically()
-            ) {
+            
+            // Supporting text for detected language
+            uiState.sourceLanguage?.let { detected ->
                 Text(
-                    text = stringResource(R.string.label_translating_to, uiState.selectedTargetLanguages.size),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // Romanization toggle
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.label_show_romanization),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Switch(
-                    checked = uiState.showRomanization,
-                    onCheckedChange = { viewModel.toggleRomanization() }
+                    stringResource(R.string.label_detected, detected.language.displayName),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp)
                 )
             }
 
@@ -177,7 +143,7 @@ fun TranslationScreen(
                             ) { result ->
                                 TranslationResultCard(
                                     result = result,
-                                    showRomanization = uiState.showRomanization,
+                                    showRomanization = true,
                                     onSpeak = { viewModel.speak(result) },
                                     onCopy = { viewModel.copyToClipboard(result) }
                                 )

@@ -18,7 +18,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -58,16 +57,11 @@ class TranslationViewModel @Inject constructor(
 
         // Load preferences
         viewModelScope.launch {
-            combine(
-                preferencesRepository.selectedLanguages,
-                preferencesRepository.showRomanization
-            ) { languages, showRomanization ->
-                Pair(languages, showRomanization)
-            }.collect { (languages, showRomanization) ->
+            preferencesRepository.selectedLanguages.collect { languages ->
                 _uiState.update {
                     it.copy(
                         selectedTargetLanguages = languages,
-                        showRomanization = showRomanization
+                        showRomanization = true
                     )
                 }
             }
@@ -213,11 +207,6 @@ class TranslationViewModel @Inject constructor(
         )
     }
 
-    fun toggleRomanization() {
-        viewModelScope.launch {
-            preferencesRepository.toggleRomanization()
-        }
-    }
 
     override fun onCleared() {
         super.onCleared()

@@ -12,6 +12,9 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -22,6 +25,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aljaroudi.lingko.R
 import com.aljaroudi.lingko.ui.components.EmptyState
 import com.aljaroudi.lingko.ui.history.components.HistoryItem
+import com.aljaroudi.lingko.ui.tags.TagEditorDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,6 +34,10 @@ fun HistoryScreen(
     viewModel: HistoryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var editingGroupId by remember { mutableStateOf<String?>(null) }
+    val editingGroup = editingGroupId?.let { groupId ->
+        uiState.translationGroups.find { it.groupId == groupId }
+    }
 
     Scaffold(
         topBar = {
@@ -121,7 +129,8 @@ fun HistoryScreen(
                                 HistoryItem(
                                     group = group,
                                     onFavoriteToggle = { viewModel.toggleFavorite(group.groupId) },
-                                    onDelete = { viewModel.delete(group.groupId) }
+                                    onDelete = { viewModel.delete(group.groupId) },
+                                    onEditTags = { editingGroupId = group.groupId }
                                 )
                             }
                         }
@@ -129,6 +138,18 @@ fun HistoryScreen(
                 }
             }
         }
+    }
+    
+    // Tag editor dialog
+    if (editingGroup != null) {
+        TagEditorDialog(
+            availableTags = uiState.availableTags,
+            selectedTags = editingGroup.tags,
+            onTagsChanged = { newTags ->
+                viewModel.updateTranslationTags(editingGroup.groupId, newTags)
+            },
+            onDismiss = { editingGroupId = null }
+        )
     }
 }
 

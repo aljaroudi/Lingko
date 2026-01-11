@@ -3,6 +3,8 @@ package com.aljaroudi.lingko.ui.history
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aljaroudi.lingko.data.repository.HistoryRepository
+import com.aljaroudi.lingko.data.repository.TagRepository
+import com.aljaroudi.lingko.domain.model.Tag
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -14,7 +16,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
-    private val historyRepository: HistoryRepository
+    private val historyRepository: HistoryRepository,
+    private val tagRepository: TagRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HistoryUiState())
@@ -24,15 +27,36 @@ class HistoryViewModel @Inject constructor(
 
     init {
         loadHistory()
+        loadTags()
+        initializeDefaultTags()
+    }
+    
+    private fun initializeDefaultTags() {
+        viewModelScope.launch {
+            tagRepository.initializeDefaultTags()
+        }
+    }
+    
+    private fun loadTags() {
+        viewModelScope.launch {
+            tagRepository.getAllTags().collect { tags ->
+                _uiState.update { it.copy(availableTags = tags) }
+            }
+        }
     }
 
     private fun loadHistory() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             historyRepository.getRecentTranslations().collect { groups ->
+                // Load tags for each group
+                val groupsWithTags = groups.map { group ->
+                    val tags = tagRepository.getTagsForTranslationSync(group.groupId)
+                    group.copy(tags = tags)
+                }
                 _uiState.update {
                     it.copy(
-                        translationGroups = groups,
+                        translationGroups = groupsWithTags,
                         isLoading = false
                     )
                 }
@@ -50,9 +74,14 @@ class HistoryViewModel @Inject constructor(
                 loadHistory()
             } else {
                 historyRepository.searchTranslations(query).collect { groups ->
+                    // Load tags for each group
+                    val groupsWithTags = groups.map { group ->
+                        val tags = tagRepository.getTagsForTranslationSync(group.groupId)
+                        group.copy(tags = tags)
+                    }
                     _uiState.update {
                         it.copy(
-                            translationGroups = groups,
+                            translationGroups = groupsWithTags,
                             isLoading = false
                         )
                     }
@@ -76,6 +105,12 @@ class HistoryViewModel @Inject constructor(
     fun clearAll() {
         viewModelScope.launch {
             historyRepository.clearAll()
+        }
+    }
+    
+    fun updateTranslationTags(groupId: String, tags: List<Tag>) {
+        viewModelScope.launch {
+            tagRepository.setTagsForTranslation(groupId, tags.map { it.id })
         }
     }
 }
