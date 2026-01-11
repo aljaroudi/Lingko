@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aljaroudi.lingko.data.repository.AudioRepository
 import com.aljaroudi.lingko.data.repository.RomanizationRepository
 import com.aljaroudi.lingko.data.repository.TranslationRepository
 import com.aljaroudi.lingko.domain.model.Language
@@ -23,6 +24,7 @@ import javax.inject.Inject
 class TranslationViewModel @Inject constructor(
     private val translationRepository: TranslationRepository,
     private val romanizationRepository: RomanizationRepository,
+    private val audioRepository: AudioRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -30,6 +32,25 @@ class TranslationViewModel @Inject constructor(
     val uiState = _uiState.asStateFlow()
 
     private var translationJob: Job? = null
+
+    init {
+        // Initialize Text-to-Speech
+        viewModelScope.launch {
+            try {
+                audioRepository.initialize()
+            } catch (e: Exception) {
+                // TTS initialization failed, but app should continue to work
+                // User just won't be able to use speech feature
+            }
+        }
+
+        // Collect speaking state from AudioRepository
+        viewModelScope.launch {
+            audioRepository.isSpeaking.collect { isSpeaking ->
+                _uiState.update { it.copy(isSpeaking = isSpeaking) }
+            }
+        }
+    }
 
     fun onTextChange(text: String) {
         _uiState.update { it.copy(inputText = text) }
@@ -126,8 +147,11 @@ class TranslationViewModel @Inject constructor(
     }
 
     fun speak(result: TranslationResult) {
-        // Placeholder for Phase 4: Text-to-Speech
-        // Will be implemented when AudioRepository is added
+        audioRepository.speak(
+            text = result.translation,
+            language = result.language,
+            rate = 1.0f
+        )
     }
 
     fun toggleRomanization() {
@@ -137,5 +161,6 @@ class TranslationViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         translationRepository.cleanup()
+        audioRepository.cleanup()
     }
 }
