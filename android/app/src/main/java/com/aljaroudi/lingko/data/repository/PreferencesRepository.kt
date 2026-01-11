@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.aljaroudi.lingko.domain.model.Language
+import com.aljaroudi.lingko.util.LocaleHelper
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -54,10 +55,7 @@ class PreferencesRepository @Inject constructor(
     }
 
     private fun getDefaultLanguages(): Set<Language> {
-        return setOf(
-            Language.SPANISH,
-            Language.FRENCH,
-            Language.GERMAN
-        )
+        // Use smart default based on device locale
+        return LocaleHelper.getSmartDefaultLanguages()
     }
 }

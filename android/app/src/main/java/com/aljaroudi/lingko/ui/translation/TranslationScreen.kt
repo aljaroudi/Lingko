@@ -9,6 +9,8 @@ import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,6 +31,7 @@ import com.aljaroudi.lingko.ui.components.EmptyState
 import com.aljaroudi.lingko.ui.components.ErrorState
 import com.aljaroudi.lingko.ui.components.ErrorSeverity
 import com.aljaroudi.lingko.ui.translation.components.LanguageSelectionSheet
+import com.aljaroudi.lingko.ui.translation.components.SourceLanguageSelectionDialog
 import com.aljaroudi.lingko.ui.translation.components.TranslationResultCard
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,6 +44,7 @@ fun TranslationScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showLanguageSelection by remember { mutableStateOf(false) }
+    var showSourceLanguageSelection by remember { mutableStateOf(false) }
 
     // Register the callback for extracted text
     LaunchedEffect(Unit) {
@@ -91,14 +95,72 @@ fun TranslationScreen(
                 maxLines = 6
             )
             
-            // Supporting text for detected language
-            uiState.sourceLanguage?.let { detected ->
-                Text(
-                    stringResource(R.string.label_detected, detected.language.displayName),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
+            // Source language selector
+            if (uiState.sourceLanguage != null || uiState.manualSourceLanguage != null) {
+                val effectiveSource = uiState.effectiveSourceLanguage
+                val isManual = uiState.manualSourceLanguage != null
+                
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            if (isManual) Icons.Default.Edit else Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = if (isManual) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = if (isManual) {
+                                "Source: ${effectiveSource?.displayName ?: ""}"
+                            } else {
+                                stringResource(R.string.label_detected, effectiveSource?.displayName ?: "")
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isManual) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
+                    
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (isManual) {
+                            TextButton(
+                                onClick = { viewModel.clearManualSourceLanguage() },
+                                contentPadding = PaddingValues(horizontal = 8.dp)
+                            ) {
+                                Text(
+                                    "Auto",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                        TextButton(
+                            onClick = { showSourceLanguageSelection = true },
+                            contentPadding = PaddingValues(horizontal = 8.dp)
+                        ) {
+                            Text(
+                                "Change",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
             }
 
             HorizontalDivider()
@@ -168,6 +230,15 @@ fun TranslationScreen(
             selectedLanguages = uiState.selectedTargetLanguages,
             onLanguageToggle = viewModel::toggleLanguage,
             onDismiss = { showLanguageSelection = false }
+        )
+    }
+    
+    if (showSourceLanguageSelection) {
+        SourceLanguageSelectionDialog(
+            currentSourceLanguage = uiState.effectiveSourceLanguage,
+            detectedLanguages = uiState.possibleSourceLanguages,
+            onLanguageSelected = viewModel::setManualSourceLanguage,
+            onDismiss = { showSourceLanguageSelection = false }
         )
     }
 }

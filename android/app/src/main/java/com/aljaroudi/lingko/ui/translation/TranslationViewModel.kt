@@ -108,10 +108,14 @@ class TranslationViewModel @Inject constructor(
     private suspend fun translateText(text: String) {
         _uiState.update { it.copy(isTranslating = true, error = null) }
 
-        // Detect language
-        val detectedResult = translationRepository.detectLanguage(text)
+        // Detect language with priority for user-selected languages
+        val detectedResult = translationRepository.detectLanguage(
+            text = text,
+            preferredLanguages = _uiState.value.selectedTargetLanguages
+        )
         val sourceLanguage = detectedResult.getOrNull()
 
+        // This should always succeed now with fallback, but keep null check for safety
         if (sourceLanguage == null) {
             _uiState.update {
                 it.copy(
@@ -122,14 +126,43 @@ class TranslationViewModel @Inject constructor(
             return
         }
 
-        _uiState.update { it.copy(sourceLanguage = sourceLanguage) }
+        // Get possible languages for user reference
+        val possibleLanguages = translationRepository.detectPossibleLanguages(
+            text = text,
+            preferredLanguages = _uiState.value.selectedTargetLanguages,
+            maxResults = 5
+        )
 
-        // Translate to all selected languages
+        _uiState.update { 
+            it.copy(
+                sourceLanguage = sourceLanguage,
+                possibleSourceLanguages = possibleLanguages
+            ) 
+        }
+
+        // Use effective source language (manual override or detected)
+        val effectiveSource = _uiState.value.effectiveSourceLanguage ?: sourceLanguage.language
+
+        // Filter out source language from target languages (don't translate to same language)
+        val targetLanguages = _uiState.value.selectedTargetLanguages.filter { it != effectiveSource }.toSet()
+
+        // If no target languages remain after filtering, show empty results
+        if (targetLanguages.isEmpty()) {
+            _uiState.update {
+                it.copy(
+                    translations = emptyList(),
+                    isTranslating = false
+                )
+            }
+            return
+        }
+
+        // Translate to all selected languages (excluding source)
         val results = mutableListOf<TranslationResult>()
         translationRepository.translateToMultiple(
             text = text,
-            from = sourceLanguage.language,
-            toLanguages = _uiState.value.selectedTargetLanguages
+            from = effectiveSource,
+            toLanguages = targetLanguages
         ).collect { result ->
             // Add romanization if needed
             val withRomanization = if (result.language.script.needsRomanization) {
@@ -207,6 +240,29 @@ class TranslationViewModel @Inject constructor(
         )
     }
 
+    fun setManualSourceLanguage(language: Language) {
+        _uiState.update { it.copy(manualSourceLanguage = language) }
+
+        // Re-translate with the new source language
+        if (_uiState.value.inputText.isNotBlank()) {
+            translationJob?.cancel()
+            translationJob = viewModelScope.launch {
+                translateText(_uiState.value.inputText)
+            }
+        }
+    }
+
+    fun clearManualSourceLanguage() {
+        _uiState.update { it.copy(manualSourceLanguage = null) }
+
+        // Re-translate with auto-detected language
+        if (_uiState.value.inputText.isNotBlank()) {
+            translationJob?.cancel()
+            translationJob = viewModelScope.launch {
+                translateText(_uiState.value.inputText)
+            }
+        }
+    }
 
     override fun onCleared() {
         super.onCleared()

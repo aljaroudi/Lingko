@@ -30,20 +30,93 @@ class TranslationRepository @Inject constructor(
 ) {
     private val languageIdentifier = LanguageIdentification.getClient()
     private val translators = mutableMapOf<String, Translator>()
-    suspend fun detectLanguage(text: String): Result<DetectedLanguage> = withContext(Dispatchers.IO) {
+    suspend fun detectLanguage(
+        text: String,
+        preferredLanguages: Set<Language> = emptySet()
+    ): Result<DetectedLanguage> = withContext(Dispatchers.IO) {
         try {
-            val languageCode = languageIdentifier.identifyLanguage(text).await()
+            // Use identifyPossibleLanguages for better results with confidence scores
+            val possibleLanguages = languageIdentifier.identifyPossibleLanguages(text).await()
 
-            if (languageCode == "und") {
-                return@withContext Result.failure(Exception("Language not detected"))
+            if (possibleLanguages.isEmpty()) {
+                // Fallback to English if no language detected
+                return@withContext Result.success(
+                    DetectedLanguage(Language.ENGLISH, confidence = 0.5f)
+                )
             }
 
-            val language = Language.fromMlKitCode(languageCode)
-                ?: return@withContext Result.failure(Exception("Unsupported language: $languageCode"))
+            // Convert to supported languages with confidence boost for preferred languages
+            val candidates = possibleLanguages
+                .mapNotNull { identified ->
+                    val language = Language.fromMlKitCode(identified.languageTag)
+                    if (language != null) {
+                        val baseConfidence = identified.confidence
+                        // Boost confidence for user-selected languages
+                        val adjustedConfidence = if (language in preferredLanguages) {
+                            minOf(1.0f, baseConfidence + 0.2f)
+                        } else {
+                            baseConfidence
+                        }
+                        DetectedLanguage(language, adjustedConfidence)
+                    } else {
+                        null
+                    }
+                }
+                .sortedByDescending { it.confidence }
 
-            Result.success(DetectedLanguage(language, confidence = 1.0f))
+            if (candidates.isEmpty()) {
+                // No supported language found, fallback to English
+                return@withContext Result.success(
+                    DetectedLanguage(Language.ENGLISH, confidence = 0.5f)
+                )
+            }
+
+            // Return the highest confidence language
+            Result.success(candidates.first())
         } catch (e: Exception) {
-            Result.failure(e)
+            // Even on error, return English as fallback instead of failing
+            Result.success(DetectedLanguage(Language.ENGLISH, confidence = 0.3f))
+        }
+    }
+
+    suspend fun detectPossibleLanguages(
+        text: String,
+        preferredLanguages: Set<Language> = emptySet(),
+        maxResults: Int = 5
+    ): List<DetectedLanguage> = withContext(Dispatchers.IO) {
+        try {
+            val possibleLanguages = languageIdentifier.identifyPossibleLanguages(text).await()
+
+            if (possibleLanguages.isEmpty()) {
+                return@withContext listOf(DetectedLanguage(Language.ENGLISH, confidence = 0.5f))
+            }
+
+            val candidates = possibleLanguages
+                .mapNotNull { identified ->
+                    val language = Language.fromMlKitCode(identified.languageTag)
+                    if (language != null) {
+                        val baseConfidence = identified.confidence
+                        // Boost confidence for user-selected languages
+                        val adjustedConfidence = if (language in preferredLanguages) {
+                            minOf(1.0f, baseConfidence + 0.2f)
+                        } else {
+                            baseConfidence
+                        }
+                        DetectedLanguage(language, adjustedConfidence)
+                    } else {
+                        null
+                    }
+                }
+                .sortedByDescending { it.confidence }
+                .take(maxResults)
+
+            if (candidates.isEmpty()) {
+                listOf(DetectedLanguage(Language.ENGLISH, confidence = 0.5f))
+            } else {
+                candidates
+            }
+        } catch (e: Exception) {
+            listOf(DetectedLanguage(Language.ENGLISH, confidence = 0.3f))
         }
     }
 
