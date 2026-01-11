@@ -1,0 +1,75 @@
+<resources>
+    <!-- App Name -->
+    <string name="app_name">Lingko</string>
+    
+    <!-- Screen Titles -->
+    <string name="title_translation">Lingko</string>
+    <string name="title_history">History</string>
+    <string name="title_image_translation">Translate from Image</string>
+    
+    <!-- Navigation -->
+    <string name="nav_back">Back</string>
+    
+    <!-- Translation Screen -->
+    <string name="placeholder_enter_text">Enter text to translate</string>
+    <string name="label_detected">Detected: %s</string>
+    <string name="empty_translation_title">Ready to translate</string>
+    <string name="empty_translation_message">Enter text above to translate into multiple languages simultaneously</string>
+    <string name="error_translation_failed">Translation failed</string>
+    <string name="error_could_not_detect_language">Could not detect language</string>
+    
+    <!-- History Screen -->
+    <string name="placeholder_search_translations">Search translations…</string>
+    <string name="empty_history_title">No translation history yet</string>
+    <string name="empty_history_message">Start translating to build your history</string>
+    <string name="empty_search_title">No translations found</string>
+    <string name="empty_search_message">No translations match \"%s\"</string>
+    
+    <!-- Image Translation Screen -->
+    <string name="label_extracting_text">Extracting text…</string>
+    <string name="label_text_regions_detected">%d text region(s) detected</string>
+    <string name="button_new_image">New Image</string>
+    <string name="button_select_image">Select Image</string>
+    <string name="button_translate_all">Translate All</string>
+    <string name="empty_image_title">Select an image to extract text</string>
+    <string name="empty_image_message">Choose a photo from your gallery to translate text from images</string>
+    <string name="error_no_text_found">No text found in image</string>
+    <string name="error_failed_extract_text">Failed to extract text: %s</string>
+    
+    <!-- Translation Result Card -->
+    <string name="button_speak">Speak</string>
+    <string name="button_copy">Copy</string>
+    
+    <!-- Translation Bottom Sheet -->
+    <string name="label_selected_text">Selected Text</string>
+    <string name="empty_no_translations">No translations yet</string>
+    
+    <!-- Error States -->
+    <string name="button_retry">Retry</string>
+    <string name="button_dismiss">Dismiss</string>
+    
+    <!-- Content Descriptions -->
+    <string name="cd_history">History</string>
+    <string name="cd_select_languages">Select languages</string>
+    <string name="cd_translate_from_image">Translate from image</string>
+    <string name="cd_back">Back</string>
+    <string name="cd_clear_all">Clear all</string>
+    <string name="cd_delete">Delete</string>
+    <string name="cd_favorite">Favorite</string>
+    <string name="cd_unfavorite">Unfavorite</string>
+    <string name="cd_speak_translation">Speak translation</string>
+    <string name="cd_copy_translation">Copy translation</string>
+    <string name="cd_selected_image">Selected image with text</string>
+    <string name="cd_select_new_image">Select new image</string>
+    <string name="cd_translate_all_text">Translate all text</string>
+    <string name="cd_dismiss">Dismiss</string>
+    
+    <!-- Language Selection -->
+    <string name="title_select_languages">Select Languages</string>
+    <string name="label_target_languages">Target Languages</string>
+    <string name="button_done">Done</string>
+    
+    <!-- Common -->
+    <string name="loading">Loading…</string>
+    <string name="error">Error</string>
+</resources>
