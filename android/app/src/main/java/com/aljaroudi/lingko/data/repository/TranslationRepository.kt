@@ -30,7 +30,6 @@ class TranslationRepository @Inject constructor(
 ) {
     private val languageIdentifier = LanguageIdentification.getClient()
     private val translators = mutableMapOf<String, Translator>()
-
     suspend fun detectLanguage(text: String): Result<DetectedLanguage> = withContext(Dispatchers.IO) {
         try {
             val languageCode = languageIdentifier.identifyLanguage(text).await()

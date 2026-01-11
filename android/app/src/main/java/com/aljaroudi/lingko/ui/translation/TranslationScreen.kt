@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -22,6 +23,7 @@ import com.aljaroudi.lingko.ui.translation.components.TranslationResultCard
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TranslationScreen(
+    onNavigateToHistory: () -> Unit,
     viewModel: TranslationViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -32,6 +34,9 @@ fun TranslationScreen(
             TopAppBar(
                 title = { Text("Lingko") },
                 actions = {
+                    IconButton(onClick = onNavigateToHistory) {
+                        Icon(Icons.Default.History, contentDescription = "History")
+                    }
                     IconButton(onClick = { showLanguageSelection = true }) {
                         Icon(Icons.Default.Settings, contentDescription = "Select languages")
                     }

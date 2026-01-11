@@ -6,6 +6,8 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aljaroudi.lingko.data.repository.AudioRepository
+import com.aljaroudi.lingko.data.repository.HistoryRepository
+import com.aljaroudi.lingko.data.repository.PreferencesRepository
 import com.aljaroudi.lingko.data.repository.RomanizationRepository
 import com.aljaroudi.lingko.data.repository.TranslationRepository
 import com.aljaroudi.lingko.domain.model.Language
@@ -16,6 +18,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -25,6 +28,8 @@ class TranslationViewModel @Inject constructor(
     private val translationRepository: TranslationRepository,
     private val romanizationRepository: RomanizationRepository,
     private val audioRepository: AudioRepository,
+    private val historyRepository: HistoryRepository,
+    private val preferencesRepository: PreferencesRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -48,6 +53,23 @@ class TranslationViewModel @Inject constructor(
         viewModelScope.launch {
             audioRepository.isSpeaking.collect { isSpeaking ->
                 _uiState.update { it.copy(isSpeaking = isSpeaking) }
+            }
+        }
+
+        // Load preferences
+        viewModelScope.launch {
+            combine(
+                preferencesRepository.selectedLanguages,
+                preferencesRepository.showRomanization
+            ) { languages, showRomanization ->
+                Pair(languages, showRomanization)
+            }.collect { (languages, showRomanization) ->
+                _uiState.update {
+                    it.copy(
+                        selectedTargetLanguages = languages,
+                        showRomanization = showRomanization
+                    )
+                }
             }
         }
     }
@@ -118,24 +140,34 @@ class TranslationViewModel @Inject constructor(
             }
         }
 
+        // Save all translations to history with same groupId
+        if (results.isNotEmpty()) {
+            val groupId = java.util.UUID.randomUUID().toString()
+            historyRepository.saveTranslations(results, text, groupId)
+        }
+
         _uiState.update { it.copy(isTranslating = false) }
     }
 
     fun toggleLanguage(language: Language) {
-        val currentLanguages = _uiState.value.selectedTargetLanguages
-        val newLanguages = if (currentLanguages.contains(language)) {
-            currentLanguages - language
-        } else {
-            currentLanguages + language
-        }
-        _uiState.update { it.copy(selectedTargetLanguages = newLanguages) }
+        viewModelScope.launch {
+            val currentLanguages = _uiState.value.selectedTargetLanguages
+            val newLanguages = if (currentLanguages.contains(language)) {
+                currentLanguages - language
+            } else {
+                currentLanguages + language
+            }
 
-        // Re-translate if there's input text
-        if (_uiState.value.inputText.isNotBlank()) {
-            translationJob?.cancel()
-            translationJob = viewModelScope.launch {
-                delay(500)
-                translateText(_uiState.value.inputText)
+            // Save to preferences
+            preferencesRepository.setSelectedLanguages(newLanguages)
+
+            // Re-translate if there's input text
+            if (_uiState.value.inputText.isNotBlank()) {
+                translationJob?.cancel()
+                translationJob = viewModelScope.launch {
+                    delay(500)
+                    translateText(_uiState.value.inputText)
+                }
             }
         }
     }
@@ -155,7 +187,9 @@ class TranslationViewModel @Inject constructor(
     }
 
     fun toggleRomanization() {
-        _uiState.update { it.copy(showRomanization = !it.showRomanization) }
+        viewModelScope.launch {
+            preferencesRepository.toggleRomanization()
+        }
     }
 
     override fun onCleared() {

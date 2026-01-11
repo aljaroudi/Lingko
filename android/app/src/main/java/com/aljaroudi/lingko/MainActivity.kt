@@ -4,8 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.aljaroudi.lingko.ui.navigation.NavGraph
 import com.aljaroudi.lingko.ui.theme.LingkoTheme
-import com.aljaroudi.lingko.ui.translation.TranslationScreen
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -15,7 +15,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             LingkoTheme {
-                TranslationScreen()
+                NavGraph()
             }
         }
     }
