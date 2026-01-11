@@ -67,6 +67,7 @@ dependencies {
     // ML Kit
     implementation(libs.mlkit.translate)
     implementation(libs.mlkit.language.id)
+    implementation(libs.mlkit.text.recognition)
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.play.services)
@@ -81,6 +82,9 @@ dependencies {
 
     // DataStore
     implementation(libs.androidx.datastore.preferences)
+
+    // Coil for image loading
+    implementation(libs.coil.compose)
 
     // Testing
     testImplementation(libs.junit)

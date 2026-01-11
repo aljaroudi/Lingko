@@ -98,6 +98,19 @@ class TranslationViewModel @Inject constructor(
         }
     }
 
+    fun setText(text: String) {
+        // Set text and trigger translation immediately (no debounce for extracted text)
+        _uiState.update { it.copy(inputText = text) }
+        
+        translationJob?.cancel()
+        
+        if (text.isNotBlank()) {
+            translationJob = viewModelScope.launch {
+                translateText(text)
+            }
+        }
+    }
+
     private suspend fun translateText(text: String) {
         _uiState.update { it.copy(isTranslating = true, error = null) }
 

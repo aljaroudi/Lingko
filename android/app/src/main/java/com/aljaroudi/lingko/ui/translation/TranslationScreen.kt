@@ -5,13 +5,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.navigation.compose.rememberNavController
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -24,10 +27,19 @@ import com.aljaroudi.lingko.ui.translation.components.TranslationResultCard
 @Composable
 fun TranslationScreen(
     onNavigateToHistory: () -> Unit,
+    onNavigateToImageTranslation: () -> Unit,
+    onTextExtractedCallback: ((String) -> Unit) -> Unit = {},
     viewModel: TranslationViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showLanguageSelection by remember { mutableStateOf(false) }
+
+    // Register the callback for extracted text
+    LaunchedEffect(Unit) {
+        onTextExtractedCallback { text ->
+            viewModel.setText(text)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -42,6 +54,11 @@ fun TranslationScreen(
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = onNavigateToImageTranslation) {
+                Icon(Icons.Default.Image, contentDescription = "Translate from image")
+            }
         }
     ) { padding ->
         Column(
