@@ -44,7 +44,17 @@ struct ErrorBannerView: View {
 
             // Actions
             HStack(spacing: 8) {
-                if let onRetry = onRetry {
+                if let action = error.action, let actionTitle = error.actionTitle {
+                    Button {
+                        action()
+                    } label: {
+                        Text(actionTitle)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                } else if let onRetry = onRetry {
                     Button {
                         onRetry()
                     } label: {
@@ -81,15 +91,32 @@ struct ErrorMessage: Identifiable {
     let title: String
     let message: String?
     let severity: ErrorSeverity
+    let actionTitle: String?
+    let action: (() -> Void)?
 
-    init(title: String, message: String? = nil, severity: ErrorSeverity = .error) {
+    init(title: String, message: String? = nil, severity: ErrorSeverity = .error, actionTitle: String? = nil, action: (() -> Void)? = nil) {
         self.title = title
         self.message = message
         self.severity = severity
+        self.actionTitle = actionTitle
+        self.action = action
     }
 
     static func from(_ error: Error) -> ErrorMessage {
         if let translationError = error as? TranslationError {
+            // Handle missing language packs specially
+            if case .missingLanguagePacks = translationError {
+                return ErrorMessage(
+                    title: translationError.errorDescription ?? "Language packs missing",
+                    message: translationError.recoverySuggestion,
+                    severity: .warning,
+                    actionTitle: "Download",
+                    action: {
+                        openTranslateSettings()
+                    }
+                )
+            }
+
             return ErrorMessage(
                 title: translationError.errorDescription ?? "Translation failed",
                 message: translationError.recoverySuggestion,
@@ -101,6 +128,20 @@ struct ErrorMessage: Identifiable {
                 message: error.localizedDescription,
                 severity: .error
             )
+        }
+    }
+
+    private static func openTranslateSettings() {
+        // Try to open iOS Translate settings
+        if let url = URL(string: "App-prefs:TRANSLATE") {
+            UIApplication.shared.open(url) { success in
+                if !success {
+                    // Fallback to general Settings if Translate-specific URL doesn't work
+                    if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(settingsUrl)
+                    }
+                }
+            }
         }
     }
 

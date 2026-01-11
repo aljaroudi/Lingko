@@ -14,51 +14,6 @@ struct LinguisticAnalysisView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Sentiment Section
-            if let sentiment = analysis.sentiment {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Sentiment", systemImage: "chart.line.uptrend.xyaxis")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-
-                    HStack(spacing: 12) {
-                        Image(systemName: analysis.sentimentIcon)
-                            .font(.title2)
-                            .foregroundStyle(analysis.sentimentColor)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(analysis.sentimentDescription)
-                                .font(.body)
-                                .fontWeight(.medium)
-
-                            Text("Score: \(analysis.sentimentScore)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        // Sentiment bar
-                        GeometryReader { geometry in
-                            ZStack(alignment: .leading) {
-                                Capsule()
-                                    .fill(.gray.opacity(0.2))
-                                    .frame(height: 8)
-
-                                Capsule()
-                                    .fill(analysis.sentimentColor.gradient)
-                                    .frame(
-                                        width: geometry.size.width * CGFloat((sentiment + 1.0) / 2.0),
-                                        height: 8
-                                    )
-                            }
-                        }
-                        .frame(width: 100, height: 8)
-                    }
-                }
-            }
-
             // Named Entities Section
             if !analysis.entities.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {

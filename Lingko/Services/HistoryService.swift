@@ -33,7 +33,6 @@ struct HistoryService {
                 "languageCode": result.language.minimalIdentifier,
                 "text": result.translation,
                 "romanization": result.romanization,
-                "sentiment": result.linguisticAnalysis?.sentiment,
                 "entities": encodeEntities(result.linguisticAnalysis?.entities ?? [])
             ]
         }
@@ -44,11 +43,62 @@ struct HistoryService {
             return
         }
 
-        // Create single SavedTranslation entry with all translations
+        let sourceLanguageCode = results.first?.sourceLanguage?.minimalIdentifier
+        let newTargetLanguageCodes = extractTargetLanguageCodes(from: jsonString)
+
+        // Check for duplicate translation before creating a new entry
+        let predicate = #Predicate<SavedTranslation> { translation in
+            translation.sourceText == sourceText &&
+            translation.sourceLanguageCode == sourceLanguageCode
+        }
+
+        let descriptor = FetchDescriptor<SavedTranslation>(predicate: predicate)
+
+        do {
+            let candidates = try context.fetch(descriptor)
+
+            // Check each candidate for exact match (same target languages)
+            for candidate in candidates {
+                let candidateTargetLanguageCodes = extractTargetLanguageCodes(from: candidate.translations)
+
+                // If target language sets match exactly, this is a duplicate
+                if candidateTargetLanguageCodes == newTargetLanguageCodes {
+                    // Update timestamp of existing entry
+                    candidate.timestamp = Date()
+
+                    // Apply AI-suggested tags if services provided
+                    if let aiService = aiService, let tagService = tagService {
+                        logger.info("🤖 Requesting AI tag suggestions...")
+                        let suggestedTagNames = await aiService.suggestTags(for: sourceText)
+
+                        if !suggestedTagNames.isEmpty {
+                            logger.info("🏷️ AI suggested tags: \(suggestedTagNames.joined(separator: ", "))")
+                            let tags = tagService.getOrCreateTags(byNames: suggestedTagNames, context: context)
+                            // Merge with existing tags (avoid duplicates)
+                            let existingTagIds = Set(candidate.tags?.map { $0.id } ?? [])
+                            let newTags = tags.filter { !existingTagIds.contains($0.id) }
+                            if !newTags.isEmpty {
+                                candidate.tags = (candidate.tags ?? []) + newTags
+                            }
+                        }
+                    }
+
+                    try context.save()
+                    let tagInfo = candidate.tags?.map { $0.name }.joined(separator: ", ") ?? "none"
+                    logger.info("🔄 Updated duplicate translation timestamp: \(sourceText.prefix(30))... → \(results.count) languages, tags: \(tagInfo)")
+                    return
+                }
+            }
+        } catch {
+            logger.error("❌ Failed to check for duplicates: \(error.localizedDescription)")
+            // Continue with creating new entry if duplicate check fails
+        }
+
+        // No duplicate found, create new entry
         let savedTranslation = SavedTranslation(
             timestamp: Date(),
             sourceText: sourceText,
-            sourceLanguageCode: results.first?.sourceLanguage?.minimalIdentifier,
+            sourceLanguageCode: sourceLanguageCode,
             detectionConfidence: results.first?.detectionConfidence ?? 0.0,
             isFavorite: false,
             translations: jsonString
@@ -267,6 +317,20 @@ struct HistoryService {
         }
 
         return jsonString
+    }
+
+    /// Extract set of target language codes from translations JSON string
+    private func extractTargetLanguageCodes(from translationsJSON: String) -> Set<String> {
+        guard let data = translationsJSON.data(using: .utf8),
+              let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return []
+        }
+
+        let languageCodes = array.compactMap { dict in
+            dict["languageCode"] as? String
+        }
+
+        return Set(languageCodes)
     }
 
 }

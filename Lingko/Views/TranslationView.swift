@@ -16,13 +16,12 @@ struct TranslationView: View {
     @State private var audioService = AudioService()
     @State private var aiService = AIAssistantService()
     @State private var historyService = HistoryService()
-    @State private var translationMemoryService = TranslationMemoryService()
     @State private var tagService = TagService()
-    @State private var connectivityService = ConnectivityService()
     @Binding var inputText: String
     @State private var translations: [TranslationResult] = []
     @State private var selectedLanguages: Set<Locale.Language> = LanguagePreferences.loadSelectedLanguages()
     @State private var isTranslating = false
+    @State private var loadingLanguages: Set<Locale.Language> = []
     @State private var showLanguageSelection = false
     @State private var showImageTranslation = false
     @State private var showSettings = false
@@ -45,19 +44,22 @@ struct TranslationView: View {
     }
     @State private var debounceTask: Task<Void, Never>?
     @State private var detectedLanguage: String?
+    @State private var detectedLanguages: [(language: Locale.Language, confidence: Double, isDownloaded: Bool)] = []
+    @State private var selectedSourceLanguage: Locale.Language? = nil
+    @State private var currentSourceLanguage: Locale.Language? = nil
+    @State private var showSourceLanguagePicker = false
+    @State private var installedLanguages: Set<Locale.Language> = []
     @State private var sourceRomanization: String?
     @State private var errorMessage: ErrorMessage?
     @State private var errorTrigger = UUID()
     @FocusState private var isInputFocused: Bool
     @AppStorage("defaultSpeechRate") private var speechRate: Double = 0.5
-    @State private var translationMemorySuggestions: [TranslationMemorySuggestion] = []
 
     // Feature toggles
-    @AppStorage("includeLinguisticAnalysis") private var includeLinguisticAnalysis: Bool = false
     @AppStorage("includeRomanization") private var includeRomanization: Bool = true
     @AppStorage("autoSaveToHistory") private var autoSaveToHistory: Bool = true
 
-    private let debounceDelay: Duration = .milliseconds(500)
+    private let debounceDelay: Duration = .milliseconds(300)
 
     init(initialText: Binding<String>) {
         _inputText = initialText
@@ -107,6 +109,19 @@ struct TranslationView: View {
                 .sheet(isPresented: $showSettings) {
                     SettingsView()
                 }
+                .sheet(isPresented: $showSourceLanguagePicker) {
+                    SourceLanguagePickerView(
+                        detectedLanguages: detectedLanguages,
+                        installedLanguages: installedLanguages,
+                        selectedSourceLanguage: $selectedSourceLanguage,
+                        onAutoDetect: {
+                            selectedSourceLanguage = nil
+                            if !inputText.isEmpty {
+                                handleTextChange(inputText)
+                            }
+                        }
+                    )
+                }
                 .sheet(isPresented: showImageTranslationBinding) {
                     // The binding guarantees selectedImage is non-nil when sheet is shown
                     if let image = selectedImage {
@@ -127,6 +142,15 @@ struct TranslationView: View {
                 .onChange(of: selectedLanguages) { _, newLanguages in
                     LanguagePreferences.saveSelectedLanguages(newLanguages)
                 }
+                .onChange(of: selectedSourceLanguage) { _, newLanguage in
+                    // Update current source language when manually selected
+                    if let newLanguage = newLanguage {
+                        currentSourceLanguage = newLanguage
+                    } else if !inputText.isEmpty {
+                        // If auto-detect is selected, trigger translation to recalculate
+                        handleTextChange(inputText)
+                    }
+                }
                 .onChange(of: selectedPhotoItem) { oldItem, newItem in
                     // Clear state when picker is dismissed without selection
                     if newItem == nil {
@@ -146,6 +170,9 @@ struct TranslationView: View {
                 .onDisappear {
                     audioService.stop()
                 }
+                .task {
+                    await loadInstalledLanguages()
+                }
                 .sensoryFeedback(.impact(weight: .light), trigger: translations.count)
                 .sensoryFeedback(.error, trigger: errorTrigger)
         }
@@ -154,20 +181,8 @@ struct TranslationView: View {
     @ViewBuilder
     private var mainContent: some View {
         VStack(spacing: 0) {
-            // Offline warning
-            if !connectivityService.isConnected {
-                offlineWarningBanner
-            }
-
             // Input section
             inputSection
-                .padding()
-                .background(Color(.systemGroupedBackground))
-
-            // Translation memory suggestions
-            if !translationMemorySuggestions.isEmpty {
-                translationMemorySuggestionsSection
-            }
 
             Divider()
 
@@ -184,14 +199,34 @@ struct TranslationView: View {
             HStack {
                 Spacer()
 
-                if let detectedLanguage {
-                    Text(detectedLanguage)
-                        .font(.caption)
+                if let sourceLanguage = currentSourceLanguage {
+                    Button {
+                        showSourceLanguagePicker = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            if selectedSourceLanguage != nil {
+                                Image(systemName: "hand.tap.fill")
+                                    .font(.caption2)
+                            }
+                            Text(Locale.current.localizedString(forLanguageCode: sourceLanguage.minimalIdentifier) ?? sourceLanguage.minimalIdentifier)
+                                .font(.caption)
+                            // Show confidence indicator if low confidence and not manually selected
+                            if selectedSourceLanguage == nil,
+                               let detected = detectedLanguages.first(where: { $0.language == sourceLanguage }),
+                               detected.confidence < 0.8 {
+                                Image(systemName: "questionmark.circle")
+                                    .font(.caption2)
+                            }
+                            Image(systemName: "chevron.down")
+                                .font(.caption2)
+                        }
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color(.tertiarySystemFill))
                         .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
 
@@ -227,42 +262,28 @@ struct TranslationView: View {
                         .textSelection(.enabled)
                 }
             }
-
-            if isTranslating {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Translating...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
         }
+        .padding()
     }
 
     // MARK: - Results Section
 
     @ViewBuilder
     private var resultsSection: some View {
-        if isTranslating {
-            LoadingStateView(style: .skeleton, count: min(selectedLanguages.count, 5))
-                .transition(.opacity.combined(with: .scale(scale: 0.95)))
-        } else if selectedLanguages.isEmpty {
+        if selectedLanguages.isEmpty {
             EmptyStateView(
                 configuration: .noLanguagesSelected {
                     showLanguageSelection = true
                 }
             )
             .transition(.opacity)
-        } else if translations.isEmpty && !inputText.isEmpty {
-            EmptyStateView(configuration: .translationEmpty)
-                .transition(.opacity)
-        } else if translations.isEmpty {
+        } else if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             EmptyStateView(configuration: .translationEmpty)
                 .transition(.opacity)
         } else {
             ScrollView {
                 LazyVStack(spacing: 16) {
+                    // Show completed translations
                     ForEach(translations) { result in
                         TranslationResultRow(
                             result: result,
@@ -275,72 +296,24 @@ struct TranslationView: View {
                             removal: .opacity
                         ))
                     }
+
+                    // Show skeleton loaders for languages currently being translated
+                    ForEach(Array(loadingLanguages.sorted(by: { l1, l2 in
+                        (Locale.current.localizedString(forLanguageCode: l1.minimalIdentifier) ?? l1.minimalIdentifier) <
+                        (Locale.current.localizedString(forLanguageCode: l2.minimalIdentifier) ?? l2.minimalIdentifier)
+                    })), id: \.minimalIdentifier) { language in
+                        SkeletonCard()
+                            .transition(.asymmetric(
+                                insertion: .scale(scale: 0.9).combined(with: .opacity),
+                                removal: .opacity
+                            ))
+                    }
                 }
                 .padding()
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Color(.systemGroupedBackground))
         }
-    }
-
-    // MARK: - Offline Warning Banner
-
-    @ViewBuilder
-    private var offlineWarningBanner: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "wifi.slash")
-                .foregroundStyle(.orange)
-            Text("Offline - Language packs may be unavailable")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(Color.orange.opacity(0.1))
-        .transition(.move(edge: .top).combined(with: .opacity))
-    }
-
-    // MARK: - Translation Memory Suggestions Section
-
-    @ViewBuilder
-    private var translationMemorySuggestionsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "lightbulb.fill")
-                    .foregroundStyle(.yellow)
-                    .font(.caption)
-
-                Text("Similar Translations")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Button {
-                    translationMemorySuggestions = []
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding(.horizontal)
-            .padding(.top, 8)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(translationMemorySuggestions) { suggestion in
-                        TranslationMemorySuggestionCard(suggestion: suggestion) {
-                            applySuggestion(suggestion)
-                        }
-                    }
-                }
-                .padding(.horizontal)
-            }
-            .padding(.bottom, 8)
-        }
-        .background(Color(.secondarySystemGroupedBackground))
     }
 
     // MARK: - Language Selection Button
@@ -374,17 +347,14 @@ struct TranslationView: View {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             translations = []
             detectedLanguage = nil
+            detectedLanguages = []
+            selectedSourceLanguage = nil
+            currentSourceLanguage = nil
             sourceRomanization = nil
-            translationMemorySuggestions = []
             isTranslating = false
+            loadingLanguages = []
             return
         }
-
-        // Fetch translation memory suggestions immediately (no debounce)
-        translationMemorySuggestions = translationMemoryService.findSimilarTranslations(
-            for: text,
-            context: modelContext
-        )
 
         // Create new debounced task for translation
         debounceTask = Task {
@@ -406,37 +376,105 @@ struct TranslationView: View {
         errorMessage = nil
 
         do {
-            // Detect language
-            let (language, _) = service.detectLanguage(for: text)
-            if let language {
-                detectedLanguage = Locale.current.localizedString(forLanguageCode: language.minimalIdentifier)
-                    ?? language.minimalIdentifier
+            // Detect languages with preference for user-selected languages
+            let detected = service.detectLanguages(
+                for: text,
+                preferredLanguages: selectedLanguages,
+                installedLanguages: installedLanguages,
+                maxResults: 5
+            )
+            detectedLanguages = detected
+            
+            // Determine source language with priority:
+            // 1. Manual override (if set)
+            // 2. Highest confidence language that's user-selected (doesn't need to be downloaded)
+            // 3. Highest confidence detected language
+            // Note: Source language doesn't need to be downloaded, only target languages do
+            let sourceLanguage: Locale.Language?
+            if let manual = selectedSourceLanguage {
+                sourceLanguage = manual
+            } else {
+                // Find best language that's also user-selected
+                let detectedAndSelected = detected.first { result in
+                    selectedLanguages.contains(result.language)
+                }
+                
+                if let best = detectedAndSelected {
+                    sourceLanguage = best.language
+                } else {
+                    // Fallback to any detected language
+                    sourceLanguage = detected.first?.language
+                }
+            }
+            
+            // Update display for primary detected language
+            if let primary = detected.first {
+                detectedLanguage = Locale.current.localizedString(forLanguageCode: primary.language.minimalIdentifier)
+                    ?? primary.language.minimalIdentifier
             }
 
             // Check if languages are selected
             guard !selectedLanguages.isEmpty else {
                 throw TranslationError.invalidConfiguration
             }
-
-            // Perform translation with feature flags
-            let results = await service.translateToAll(
-                text: text,
-                from: language,
-                to: selectedLanguages,
-                includeLinguisticAnalysis: includeLinguisticAnalysis,
-                includeRomanization: includeRomanization
-            )
-
-            // Extract source romanization from first result if available
-            if includeRomanization, let firstResult = results.first {
-                sourceRomanization = firstResult.sourceRomanization
-            } else {
-                sourceRomanization = nil
+            
+            // Check if we have a valid source language
+            guard let sourceLanguage = sourceLanguage else {
+                throw TranslationError.detectionFailed
             }
 
-            // Update UI
-            translations = results
+            // Update current source language for UI display
+            currentSourceLanguage = sourceLanguage
+
+            // Filter target languages to only downloaded ones
+            let downloadedTargetLanguages = selectedLanguages.filter { installedLanguages.contains($0) }
+
+            guard !downloadedTargetLanguages.isEmpty else {
+                // Collect missing language names
+                let missingLanguages = selectedLanguages.compactMap { language in
+                    Locale.current.localizedString(forLanguageCode: language.minimalIdentifier)
+                }
+                throw TranslationError.missingLanguagePacks(missingLanguages)
+            }
+
+            // Set loading state for all target languages (excluding source)
+            loadingLanguages = downloadedTargetLanguages.filter { $0 != sourceLanguage }
+
+            // Clear old translations to prepare for new ones
+            translations = []
+
+            // Perform translation with feature flags and progressive updates
+            let results = await service.translateToAll(
+                text: text,
+                from: sourceLanguage,
+                to: downloadedTargetLanguages,
+                includeRomanization: includeRomanization,
+                onEachResult: { @MainActor result in
+                    // Add or update translation as it arrives
+                    if let index = translations.firstIndex(where: { $0.language == result.language }) {
+                        translations[index] = result
+                    } else {
+                        translations.append(result)
+                    }
+
+                    // Remove from loading set
+                    loadingLanguages.remove(result.language)
+
+                    // Extract source romanization from first result if available
+                    if includeRomanization && sourceRomanization == nil {
+                        sourceRomanization = result.sourceRomanization
+                    }
+                }
+            )
+
+            // Fallback: extract source romanization if not yet set
+            if includeRomanization, sourceRomanization == nil, let firstResult = results.first {
+                sourceRomanization = firstResult.sourceRomanization
+            }
+
+            // Clear loading state
             isTranslating = false
+            loadingLanguages = []
 
             // Auto-save to history with AI-powered tagging
             if autoSaveToHistory && !results.isEmpty {
@@ -450,6 +488,7 @@ struct TranslationView: View {
             }
         } catch {
             isTranslating = false
+            loadingLanguages = []
             errorMessage = ErrorMessage.from(error)
             errorTrigger = UUID()
         }
@@ -460,17 +499,6 @@ struct TranslationView: View {
         Task {
             await performTranslation(text: inputText)
         }
-    }
-
-    private func applySuggestion(_ suggestion: TranslationMemorySuggestion) {
-        // Apply the suggested text
-        inputText = suggestion.sourceText
-
-        // Clear translation memory suggestions after applying
-        translationMemorySuggestions = []
-
-        // Trigger translation
-        handleTextChange(suggestion.sourceText)
     }
 
     private func loadImage(from item: PhotosPickerItem?) async {
@@ -507,50 +535,287 @@ struct TranslationView: View {
             }
         }
     }
+    
+    private func loadInstalledLanguages() async {
+        // Check which languages are installed by testing against a reference language
+        let referenceLanguage = Locale.Language(identifier: "en")
+        var installed: Set<Locale.Language> = []
+
+        for languageInfo in SupportedLanguages.all {
+            let language = languageInfo.language
+
+            // Check if this language pair is installed
+            let isInstalled = await service.isLanguageInstalled(
+                from: referenceLanguage,
+                to: language
+            )
+            if isInstalled {
+                installed.insert(language)
+            }
+        }
+
+        // Always include system language (it's always downloaded even if not detected)
+        if let systemLang = SupportedLanguages.deviceLanguage {
+            installed.insert(systemLang)
+        }
+
+        installedLanguages = installed
+
+        // Auto-select all downloaded languages on first launch
+        if !LanguagePreferences.hasSavedPreferences() {
+            selectedLanguages = installed
+            LanguagePreferences.saveSelectedLanguages(installed)
+        }
+    }
 }
 
-// MARK: - Translation Memory Suggestion Card
+// MARK: - Source Language Picker View
 
-struct TranslationMemorySuggestionCard: View {
-    let suggestion: TranslationMemorySuggestion
-    let onTap: () -> Void
-
+struct SourceLanguagePickerView: View {
+    let detectedLanguages: [(language: Locale.Language, confidence: Double, isDownloaded: Bool)]
+    let installedLanguages: Set<Locale.Language>
+    @Binding var selectedSourceLanguage: Locale.Language?
+    let onAutoDetect: () -> Void
+    
+    @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
+    
+    private var downloadedLanguages: [LanguageInfo] {
+        SupportedLanguages.all.filter { languageInfo in
+            installedLanguages.contains(languageInfo.language)
+        }.sorted { $0.name < $1.name }
+    }
+    
+    private var notDownloadedLanguages: [LanguageInfo] {
+        SupportedLanguages.all.filter { languageInfo in
+            !installedLanguages.contains(languageInfo.language)
+        }.sorted { $0.name < $1.name }
+    }
+    
+    private var filteredDownloadedLanguages: [LanguageInfo] {
+        if searchText.isEmpty {
+            return downloadedLanguages
+        }
+        return downloadedLanguages.filter { languageInfo in
+            languageInfo.name.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+    
+    private var filteredNotDownloadedLanguages: [LanguageInfo] {
+        if searchText.isEmpty {
+            return notDownloadedLanguages
+        }
+        return notDownloadedLanguages.filter { languageInfo in
+            languageInfo.name.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+    
     var body: some View {
-        Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Image(systemName: suggestion.confidenceIcon)
-                        .font(.caption2)
-                        .foregroundStyle(suggestion.isHighConfidence ? .green : .orange)
-
-                    Text(suggestion.similarityPercentage)
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-
-                    Spacer()
+        NavigationStack {
+            List {
+                // Download more languages button
+                Section {
+                    Button {
+                        openTranslateSettings()
+                    } label: {
+                        HStack {
+                            Image(systemName: "arrow.down.circle")
+                                .foregroundStyle(.blue)
+                            Text("Download More Languages")
+                                .foregroundStyle(.blue)
+                            Spacer()
+                            Image(systemName: "arrow.forward")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
-
-                Text(suggestion.sourceText)
-                    .font(.subheadline)
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-
-                if let firstTranslation = suggestion.translations.first {
-                    Text("\(firstTranslation.languageName): \(firstTranslation.text)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                
+                // Auto-detect option
+                Section {
+                    Button {
+                        onAutoDetect()
+                        dismiss()
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Auto-detect")
+                                    .foregroundStyle(.primary)
+                                if !detectedLanguages.isEmpty {
+                                    let downloadedDetected = detectedLanguages.filter { $0.isDownloaded }
+                                    if !downloadedDetected.isEmpty {
+                                        Text("Currently: \(downloadedDetected.map { Locale.current.localizedString(forLanguageCode: $0.language.minimalIdentifier) ?? $0.language.minimalIdentifier }.prefix(3).joined(separator: ", "))")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            
+                            Spacer()
+                            
+                            if selectedSourceLanguage == nil {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.blue)
+                                    .fontWeight(.semibold)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                } header: {
+                    Text("Detection Mode")
+                }
+                
+                // Detected languages section
+                if !detectedLanguages.isEmpty {
+                    Section {
+                        ForEach(detectedLanguages, id: \.language.minimalIdentifier) { detected in
+                            Button {
+                                if detected.isDownloaded {
+                                    selectedSourceLanguage = detected.language
+                                    dismiss()
+                                }
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(Locale.current.localizedString(forLanguageCode: detected.language.minimalIdentifier) ?? detected.language.minimalIdentifier)
+                                            .foregroundStyle(detected.isDownloaded ? .primary : .secondary)
+                                        
+                                        HStack(spacing: 4) {
+                                            ConfidenceBadge(confidence: detected.confidence)
+                                            
+                                            if !detected.isDownloaded {
+                                                Text("Download Required")
+                                                    .font(.caption2)
+                                                    .foregroundStyle(.white)
+                                                    .padding(.horizontal, 6)
+                                                    .padding(.vertical, 2)
+                                                    .background(Color.orange)
+                                                    .clipShape(Capsule())
+                                            }
+                                        }
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    if detected.isDownloaded && selectedSourceLanguage?.minimalIdentifier == detected.language.minimalIdentifier {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(.blue)
+                                            .fontWeight(.semibold)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!detected.isDownloaded)
+                            .opacity(detected.isDownloaded ? 1.0 : 0.6)
+                        }
+                    } header: {
+                        Text("Detected Languages")
+                    }
+                }
+                
+                // Downloaded languages
+                if !filteredDownloadedLanguages.isEmpty {
+                    Section {
+                        ForEach(filteredDownloadedLanguages) { languageInfo in
+                            Button {
+                                selectedSourceLanguage = languageInfo.language
+                                dismiss()
+                            } label: {
+                                HStack {
+                                    Text(languageInfo.name)
+                                        .foregroundStyle(.primary)
+                                    
+                                    Spacer()
+                                    
+                                    if selectedSourceLanguage?.minimalIdentifier == languageInfo.language.minimalIdentifier {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(.blue)
+                                            .fontWeight(.semibold)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    } header: {
+                        Text("Downloaded Languages")
+                    }
+                }
+                
+                // Not downloaded languages (text only)
+                if !filteredNotDownloadedLanguages.isEmpty {
+                    Section {
+                        ForEach(filteredNotDownloadedLanguages) { languageInfo in
+                            HStack {
+                                Text(languageInfo.name)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text("Download required")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    } header: {
+                        Text("Available After Download")
+                    }
                 }
             }
-            .padding(12)
-            .frame(width: 200)
-            .background(Color(.systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+            .searchable(text: $searchText, prompt: "Search languages")
+            .navigationTitle("Source Language")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
         }
-        .buttonStyle(.plain)
+    }
+    
+    private func openTranslateSettings() {
+        // Try to open iOS Translate settings
+        if let url = URL(string: "App-prefs:TRANSLATE") {
+            UIApplication.shared.open(url) { success in
+                if !success {
+                    // Fallback to general Settings if Translate-specific URL doesn't work
+                    if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(settingsUrl)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Confidence Badge
+
+struct ConfidenceBadge: View {
+    let confidence: Double
+    
+    private var color: Color {
+        if confidence >= 0.8 {
+            return .green
+        } else if confidence >= 0.5 {
+            return .orange
+        } else {
+            return .red
+        }
+    }
+    
+    private var label: String {
+        String(format: "%.0f%%", confidence * 100)
+    }
+    
+    var body: some View {
+        Text(label)
+            .font(.caption2)
+            .fontWeight(.semibold)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color)
+            .clipShape(Capsule())
     }
 }
 

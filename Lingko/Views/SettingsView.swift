@@ -12,7 +12,7 @@ struct SettingsView: View {
 
     @AppStorage("defaultSpeechRate") private var defaultSpeechRate: Double = 0.5
     @AppStorage("autoSaveToHistory") private var autoSaveToHistory: Bool = true
-    @AppStorage("includeLinguisticAnalysis") private var includeLinguisticAnalysis: Bool = false
+    @AppStorage("includeLinguisticAnalysis") private var includeLinguisticAnalysis: Bool = true
     @AppStorage("includeRomanization") private var includeRomanization: Bool = true
     @AppStorage("reduceMotion") private var reduceMotion: Bool = false
     @AppStorage("hapticFeedback") private var hapticFeedback: Bool = true
@@ -20,6 +20,25 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                // Language Management
+                Section {
+                    Button {
+                        openTranslateSettings()
+                    } label: {
+                        HStack {
+                            Label("Download Languages", systemImage: "arrow.down.circle")
+                            Spacer()
+                            Image(systemName: "arrow.forward")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Language Management")
+                } footer: {
+                    Text("Download language packs in iOS Settings to enable offline translation")
+                }
+                
                 // Translation Settings
                 Section {
                     Toggle(isOn: $autoSaveToHistory) {
@@ -27,7 +46,12 @@ struct SettingsView: View {
                     }
 
                     Toggle(isOn: $includeLinguisticAnalysis) {
-                        Label("Linguistic Analysis", systemImage: "brain")
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("Linguistic Analysis", systemImage: "brain")
+                            Text("Show parts of speech and named entities")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     Toggle(isOn: $includeRomanization) {
@@ -140,6 +164,12 @@ struct SettingsView: View {
 
     private var buildNumber: String {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
+    }
+    
+    private func openTranslateSettings() {
+        if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(settingsUrl)
+        }
     }
 }
 

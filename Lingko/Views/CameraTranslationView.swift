@@ -17,6 +17,7 @@ struct CameraTranslationView: View {
     @State private var selectedText: CapturedText?
     @State private var translations: [TranslationResult] = []
     @State private var isProcessing = false
+    @State private var installedLanguages: Set<Locale.Language> = []
 
     let initialImage: UIImage
     let selectedLanguages: Set<Locale.Language>
@@ -94,6 +95,7 @@ struct CameraTranslationView: View {
                 }
             }
             .task {
+                await loadInstalledLanguages()
                 await processInitialImage()
             }
         }
@@ -165,11 +167,40 @@ struct CameraTranslationView: View {
     // MARK: - Translation Methods
 
     private func translateText(_ text: String) async {
+        // Detect languages with preference for user-selected languages
+        let detected = translationService.detectLanguages(
+            for: text,
+            preferredLanguages: selectedLanguages,
+            installedLanguages: installedLanguages,
+            maxResults: 5
+        )
+        
+        // Find best language that's also user-selected
+        // Note: Source language doesn't need to be downloaded, only target languages do
+        let sourceLanguage: Locale.Language?
+        let detectedAndSelected = detected.first { result in
+            selectedLanguages.contains(result.language)
+        }
+        
+        if let best = detectedAndSelected {
+            sourceLanguage = best.language
+        } else {
+            // Fallback to any detected language
+            sourceLanguage = detected.first?.language
+        }
+        
+        // Filter target languages to only downloaded ones
+        let downloadedTargetLanguages = selectedLanguages.filter { installedLanguages.contains($0) }
+        
+        guard let sourceLanguage = sourceLanguage, !downloadedTargetLanguages.isEmpty else {
+            // No valid source or target languages available
+            return
+        }
+        
         let results = await translationService.translateToAll(
             text: text,
-            from: nil,
-            to: selectedLanguages,
-            includeLinguisticAnalysis: false,
+            from: sourceLanguage,
+            to: downloadedTargetLanguages,
             includeRomanization: true
         )
 
@@ -189,6 +220,27 @@ struct CameraTranslationView: View {
                 tagService: tagService
             )
         }
+    }
+    
+    private func loadInstalledLanguages() async {
+        // Check which languages are installed by testing against a reference language
+        let referenceLanguage = Locale.Language(identifier: "en")
+        var installed: Set<Locale.Language> = []
+        
+        for languageInfo in SupportedLanguages.all {
+            let language = languageInfo.language
+            
+            // Check if this language pair is installed
+            let isInstalled = await translationService.isLanguageInstalled(
+                from: referenceLanguage,
+                to: language
+            )
+            if isInstalled {
+                installed.insert(language)
+            }
+        }
+        
+        installedLanguages = installed
     }
 }
 

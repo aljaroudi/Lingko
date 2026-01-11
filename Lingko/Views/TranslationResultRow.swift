@@ -17,6 +17,9 @@ struct TranslationResultRow: View {
     @State private var isAnalysisExpanded = false
     @State private var isAIEnhancedExpanded = false
     @State private var isSpeaking = false
+    @State private var analysis: LinguisticAnalysis?
+    @State private var service = TranslationService()
+    @AppStorage("includeLinguisticAnalysis") private var includeLinguisticAnalysis: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -51,13 +54,24 @@ struct TranslationResultRow: View {
                 .padding(.vertical, 4)
             }
 
-            // Linguistic Analysis (expandable)
-            if let analysis = result.linguisticAnalysis, analysis.hasData {
+            // Linguistic Analysis (expandable) - only show for supported languages
+            if includeLinguisticAnalysis && service.supportsLinguisticAnalysis(for: result.language) {
                 DisclosureGroup(
                     isExpanded: $isAnalysisExpanded,
                     content: {
-                        LinguisticAnalysisView(analysis: analysis, layoutDirection: result.layoutDirection)
+                        if let analysis = analysis, analysis.hasData {
+                            LinguisticAnalysisView(analysis: analysis, layoutDirection: result.layoutDirection)
+                                .padding(.top, 8)
+                        } else {
+                            HStack {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("Analyzing...")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                             .padding(.top, 8)
+                        }
                     },
                     label: {
                         Label("Linguistic Analysis", systemImage: "brain")
@@ -67,6 +81,11 @@ struct TranslationResultRow: View {
                     }
                 )
                 .tint(.blue)
+                .onChange(of: isAnalysisExpanded) { _, isExpanded in
+                    if isExpanded && analysis == nil {
+                        performAnalysis()
+                    }
+                }
             }
 
             // AI-Enhanced Features (expandable)
@@ -195,6 +214,16 @@ struct TranslationResultRow: View {
                 isSpeaking = false
             }
         }
+    }
+
+    private func performAnalysis() {
+        // Only perform analysis if the language supports it
+        guard service.supportsLinguisticAnalysis(for: result.language) else {
+            return
+        }
+
+        // Perform linguistic analysis on the translated text
+        analysis = service.analyzeLinguistics(for: result.translation, language: result.language)
     }
 }
 

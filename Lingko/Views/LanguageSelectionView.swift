@@ -17,25 +17,34 @@ struct LanguageSelectionView: View {
 
     private let minimumLanguageCount = 2
 
-    /// Use curated list of supported languages
-    private var availableLanguages: [LanguageInfo] {
-        // Sort: installed first, then alphabetically
-        return SupportedLanguages.all.sorted { lang1, lang2 in
-            let installed1 = installedLanguages.contains(lang1.language)
-            let installed2 = installedLanguages.contains(lang2.language)
-
-            if installed1 != installed2 {
-                return installed1 // installed languages first
-            }
-            return lang1.name < lang2.name
-        }
+    /// Downloaded languages only
+    private var downloadedLanguages: [LanguageInfo] {
+        SupportedLanguages.all.filter { languageInfo in
+            installedLanguages.contains(languageInfo.language)
+        }.sorted { $0.name < $1.name }
+    }
+    
+    /// Not downloaded languages
+    private var notDownloadedLanguages: [LanguageInfo] {
+        SupportedLanguages.all.filter { languageInfo in
+            !installedLanguages.contains(languageInfo.language)
+        }.sorted { $0.name < $1.name }
     }
 
-    private var filteredLanguages: [LanguageInfo] {
+    private var filteredDownloadedLanguages: [LanguageInfo] {
         if searchText.isEmpty {
-            return availableLanguages
+            return downloadedLanguages
         }
-        return availableLanguages.filter { languageInfo in
+        return downloadedLanguages.filter { languageInfo in
+            languageInfo.name.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+    
+    private var filteredNotDownloadedLanguages: [LanguageInfo] {
+        if searchText.isEmpty {
+            return notDownloadedLanguages
+        }
+        return notDownloadedLanguages.filter { languageInfo in
             languageInfo.name.localizedCaseInsensitiveContains(searchText)
         }
     }
@@ -47,6 +56,25 @@ struct LanguageSelectionView: View {
                     ProgressView("Loading languages...")
                 } else {
                     List {
+                        // Download more languages button
+                        Section {
+                            Button {
+                                openTranslateSettings()
+                            } label: {
+                                HStack {
+                                    Image(systemName: "arrow.down.circle")
+                                        .foregroundStyle(.blue)
+                                    Text("Download More Languages")
+                                        .foregroundStyle(.blue)
+                                    Spacer()
+                                    Image(systemName: "arrow.forward")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        
                         if selectedLanguages.count <= minimumLanguageCount {
                             Section {
                                 HStack(spacing: 8) {
@@ -59,30 +87,23 @@ struct LanguageSelectionView: View {
                             }
                         }
 
-                        Section {
-                            ForEach(filteredLanguages) { languageInfo in
-                                let language = languageInfo.language
-                                let isSelected = selectedLanguages.contains(language)
-                                let canDeselect = selectedLanguages.count > minimumLanguageCount
+                        // Downloaded languages section
+                        if !filteredDownloadedLanguages.isEmpty {
+                            Section {
+                                ForEach(filteredDownloadedLanguages) { languageInfo in
+                                    let language = languageInfo.language
+                                    let isSelected = selectedLanguages.contains(language)
+                                    let canDeselect = selectedLanguages.count > minimumLanguageCount
 
-                                Button {
-                                    toggleLanguage(language, canDeselect: canDeselect)
-                                } label: {
-                                    HStack {
-                                        VStack(alignment: .leading, spacing: 4) {
+                                    Button {
+                                        toggleLanguage(language, canDeselect: canDeselect)
+                                    } label: {
+                                        HStack {
                                             Text(languageInfo.name)
                                                 .foregroundStyle(.primary)
 
-                                            if !installedLanguages.contains(language) {
-                                                Text("Download required")
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                        }
+                                            Spacer()
 
-                                        Spacer()
-
-                                        HStack(spacing: 12) {
                                             if isSelected {
                                                 Image(systemName: "checkmark")
                                                     .foregroundStyle(canDeselect ? .blue : .gray)
@@ -90,23 +111,41 @@ struct LanguageSelectionView: View {
                                             }
                                         }
                                     }
+                                    .buttonStyle(.plain)
+                                    .disabled(isSelected && !canDeselect)
+                                    .opacity((isSelected && !canDeselect) ? 0.6 : 1.0)
                                 }
-                                .buttonStyle(.plain)
-                                .disabled(isSelected && !canDeselect)
-                                .opacity((isSelected && !canDeselect) ? 0.6 : 1.0)
+                            } header: {
+                                Text("Downloaded Languages (\(downloadedLanguages.count))")
+                            } footer: {
+                                if selectedLanguages.count == minimumLanguageCount {
+                                    Text("You have the minimum number of languages selected. Add more to enable deselection.")
+                                        .font(.caption)
+                                }
                             }
-                        } header: {
-                            Text("\(SupportedLanguages.all.count) languages")
-                        } footer: {
-                            if selectedLanguages.count == minimumLanguageCount {
-                                Text("You have the minimum number of languages selected. Add more to enable deselection.")
-                                    .font(.caption)
+                        }
+                        
+                        // Not downloaded languages (text only)
+                        if !filteredNotDownloadedLanguages.isEmpty {
+                            Section {
+                                ForEach(filteredNotDownloadedLanguages) { languageInfo in
+                                    HStack {
+                                        Text(languageInfo.name)
+                                            .foregroundStyle(.secondary)
+                                        Spacer()
+                                        Text("Download required")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            } header: {
+                                Text("Available After Download (\(notDownloadedLanguages.count))")
                             }
                         }
                     }
                     .searchable(text: $searchText, prompt: "Search languages")
                     .overlay {
-                        if filteredLanguages.isEmpty && !searchText.isEmpty {
+                        if filteredDownloadedLanguages.isEmpty && filteredNotDownloadedLanguages.isEmpty && !searchText.isEmpty {
                             ContentUnavailableView.search(text: searchText)
                         }
                     }
@@ -171,6 +210,20 @@ struct LanguageSelectionView: View {
             }
         } else {
             selectedLanguages.insert(language)
+        }
+    }
+    
+    private func openTranslateSettings() {
+        // Try to open iOS Translate settings
+        if let url = URL(string: "App-prefs:TRANSLATE") {
+            UIApplication.shared.open(url) { success in
+                if !success {
+                    // Fallback to general Settings if Translate-specific URL doesn't work
+                    if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(settingsUrl)
+                    }
+                }
+            }
         }
     }
 }
