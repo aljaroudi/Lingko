@@ -1,5 +1,6 @@
 package com.aljaroudi.lingko.ui.history
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -7,15 +8,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aljaroudi.lingko.R
+import com.aljaroudi.lingko.ui.components.EmptyState
 import com.aljaroudi.lingko.ui.history.components.HistoryItem
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -29,12 +34,12 @@ fun HistoryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("History") },
+                title = { Text(stringResource(R.string.title_history)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.cd_back)
                         )
                     }
                 },
@@ -43,7 +48,7 @@ fun HistoryScreen(
                         IconButton(onClick = { viewModel.clearAll() }) {
                             Icon(
                                 imageVector = Icons.Default.DeleteSweep,
-                                contentDescription = "Clear all"
+                                contentDescription = stringResource(R.string.cd_clear_all)
                             )
                         }
                     }
@@ -63,78 +68,70 @@ fun HistoryScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                placeholder = { Text("Search translations...") },
+                placeholder = { Text(stringResource(R.string.placeholder_search_translations)) },
                 singleLine = true
             )
 
-            // Content
-            when {
-                uiState.isLoading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                }
-
-                uiState.translationGroups.isEmpty() -> {
-                    // Empty state
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+            // Content with crossfade animation
+            Crossfade(
+                targetState = when {
+                    uiState.isLoading -> HistoryState.Loading
+                    uiState.translationGroups.isEmpty() && uiState.searchQuery.isBlank() -> HistoryState.EmptyHistory
+                    uiState.translationGroups.isEmpty() && uiState.searchQuery.isNotBlank() -> HistoryState.EmptySearch
+                    else -> HistoryState.Results
+                },
+                label = "history_state"
+            ) { state ->
+                when (state) {
+                    HistoryState.Loading -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.History,
-                                contentDescription = null,
-                                modifier = Modifier.size(80.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                            )
-                            Text(
-                                text = if (uiState.searchQuery.isBlank()) {
-                                    "No translation history yet"
-                                } else {
-                                    "No translations found"
-                                },
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
-                            )
-                            if (uiState.searchQuery.isBlank()) {
-                                Text(
-                                    text = "Start translating to build your history",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                    textAlign = TextAlign.Center
-                                )
-                            }
+                            CircularProgressIndicator()
                         }
                     }
-                }
-
-                else -> {
-                    // History list
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(vertical = 8.dp)
-                    ) {
-                        items(
-                            items = uiState.translationGroups,
-                            key = { it.groupId }
-                        ) { group ->
-                            HistoryItem(
-                                group = group,
-                                onFavoriteToggle = { viewModel.toggleFavorite(group.groupId) },
-                                onDelete = { viewModel.delete(group.groupId) }
-                            )
+                    HistoryState.EmptyHistory -> {
+                        EmptyState(
+                            icon = Icons.Default.History,
+                            title = stringResource(R.string.empty_history_title),
+                            message = stringResource(R.string.empty_history_message),
+                            modifier = Modifier.fillMaxSize(),
+                            iconTint = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                    HistoryState.EmptySearch -> {
+                        EmptyState(
+                            icon = Icons.Default.Search,
+                            title = stringResource(R.string.empty_search_title),
+                            message = stringResource(R.string.empty_search_message, uiState.searchQuery),
+                            modifier = Modifier.fillMaxSize(),
+                            iconTint = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
+                    HistoryState.Results -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(vertical = 8.dp)
+                        ) {
+                            items(
+                                items = uiState.translationGroups,
+                                key = { it.groupId }
+                            ) { group ->
+                                HistoryItem(
+                                    group = group,
+                                    onFavoriteToggle = { viewModel.toggleFavorite(group.groupId) },
+                                    onDelete = { viewModel.delete(group.groupId) }
+                                )
+                            }
                         }
                     }
                 }
             }
         }
     }
+}
+
+private enum class HistoryState {
+    Loading, EmptyHistory, EmptySearch, Results
 }

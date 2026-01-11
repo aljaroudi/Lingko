@@ -10,8 +10,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.aljaroudi.lingko.R
 import com.aljaroudi.lingko.domain.model.TranslationResult
 
 @Composable
@@ -82,11 +84,11 @@ fun TranslationResultCard(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                        contentDescription = null,
+                        contentDescription = stringResource(R.string.cd_speak_translation),
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Speak")
+                    Text(stringResource(R.string.button_speak))
                 }
 
                 OutlinedButton(
@@ -95,11 +97,11 @@ fun TranslationResultCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.ContentCopy,
-                        contentDescription = null,
+                        contentDescription = stringResource(R.string.cd_copy_translation),
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Copy")
+                    Text(stringResource(R.string.button_copy))
                 }
             }
         }

@@ -162,6 +162,20 @@ class TranslationViewModel @Inject constructor(
         _uiState.update { it.copy(isTranslating = false) }
     }
 
+    fun retryTranslation() {
+        val currentText = _uiState.value.inputText
+        if (currentText.isNotBlank()) {
+            translationJob?.cancel()
+            translationJob = viewModelScope.launch {
+                translateText(currentText)
+            }
+        }
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
+    }
+
     fun toggleLanguage(language: Language) {
         viewModelScope.launch {
             val currentLanguages = _uiState.value.selectedTargetLanguages

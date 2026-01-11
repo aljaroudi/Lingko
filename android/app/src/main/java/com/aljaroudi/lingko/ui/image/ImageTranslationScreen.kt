@@ -13,9 +13,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aljaroudi.lingko.R
+import com.aljaroudi.lingko.ui.components.EmptyState
+import com.aljaroudi.lingko.ui.components.EmptyStateAction
 import com.aljaroudi.lingko.ui.image.components.ImageWithTextOverlay
 import com.aljaroudi.lingko.ui.image.components.TranslationBottomSheet
 
@@ -38,10 +42,10 @@ fun ImageTranslationScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Translate from Image") },
+                title = { Text(stringResource(R.string.title_image_translation)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 }
             )
@@ -54,8 +58,8 @@ fun ImageTranslationScreen(
                         onTextExtracted(allText)
                         onNavigateBack()
                     },
-                    icon = { Icon(Icons.Default.Image, contentDescription = null) },
-                    text = { Text("Translate All") }
+                    icon = { Icon(Icons.Default.Image, contentDescription = stringResource(R.string.cd_translate_all_text)) },
+                    text = { Text(stringResource(R.string.button_translate_all)) }
                 )
             }
         }
@@ -77,7 +81,7 @@ fun ImageTranslationScreen(
                     ) {
                         CircularProgressIndicator()
                         Text(
-                            text = "Extracting text...",
+                            text = stringResource(R.string.label_extracting_text),
                             modifier = Modifier.padding(top = 16.dp),
                             style = MaterialTheme.typography.bodyLarge
                         )
@@ -113,7 +117,7 @@ fun ImageTranslationScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "${uiState.textBlocks.size} text region(s) detected",
+                                text = stringResource(R.string.label_text_regions_detected, uiState.textBlocks.size),
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             FilledTonalButton(
@@ -123,9 +127,9 @@ fun ImageTranslationScreen(
                                     )
                                 }
                             ) {
-                                Icon(Icons.Default.PhotoLibrary, contentDescription = null)
+                                Icon(Icons.Default.PhotoLibrary, contentDescription = stringResource(R.string.cd_select_new_image))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("New Image")
+                                Text(stringResource(R.string.button_new_image))
                             }
                         }
                     }
@@ -133,45 +137,41 @@ fun ImageTranslationScreen(
                 else -> {
                     // Initial state or error state
                     Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                        modifier = Modifier.fillMaxSize()
                     ) {
-                        Icon(
-                            Icons.Default.Image,
-                            contentDescription = null,
-                            modifier = Modifier.size(120.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                        EmptyState(
+                            icon = Icons.Default.Image,
+                            title = stringResource(R.string.empty_image_title),
+                            message = stringResource(R.string.empty_image_message),
+                            modifier = Modifier.weight(1f),
+                            actionButton = EmptyStateAction(
+                                label = stringResource(R.string.button_select_image),
+                                icon = Icons.Default.PhotoLibrary,
+                                onClick = {
+                                    launcher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                }
+                            )
                         )
-
-                        Text(
-                            text = "Select an image to extract text",
-                            modifier = Modifier.padding(16.dp),
-                            style = MaterialTheme.typography.titleMedium
-                        )
-
-                        Button(
-                            onClick = {
-                                launcher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                )
-                            }
-                        ) {
-                            Icon(Icons.Default.PhotoLibrary, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Select Image")
-                        }
 
                         // Error message
                         uiState.error?.let { error ->
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = error,
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer
+                                )
+                            ) {
+                                Text(
+                                    text = error,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
                         }
                     }
                 }

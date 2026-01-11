@@ -86,6 +86,9 @@ dependencies {
     // Coil for image loading
     implementation(libs.coil.compose)
 
+    // Splash Screen
+    implementation(libs.androidx.core.splashscreen)
+
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

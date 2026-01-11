@@ -96,6 +96,16 @@ class ImageTranslationViewModel @Inject constructor(
         }
     }
 
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
+    }
+
+    fun retryImageProcessing() {
+        _uiState.value.imageUri?.let { uri ->
+            processImage(uri)
+        }
+    }
+
     private fun translateSelectedText() {
         viewModelScope.launch {
             val selectedText = _uiState.value.selectedTextBlock?.text ?: return@launch

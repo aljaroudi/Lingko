@@ -1,9 +1,16 @@
 package com.aljaroudi.lingko.ui.translation
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Settings
@@ -17,9 +24,16 @@ import androidx.compose.runtime.setValue
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aljaroudi.lingko.R
+import com.aljaroudi.lingko.ui.components.EmptyState
+import com.aljaroudi.lingko.ui.components.ErrorState
+import com.aljaroudi.lingko.ui.components.ErrorSeverity
 import com.aljaroudi.lingko.ui.translation.components.LanguageSelectionSheet
 import com.aljaroudi.lingko.ui.translation.components.TranslationResultCard
 
@@ -44,20 +58,25 @@ fun TranslationScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Lingko") },
+                title = { 
+                    Text(
+                        stringResource(R.string.title_translation),
+                        modifier = Modifier.semantics { heading() }
+                    ) 
+                },
                 actions = {
                     IconButton(onClick = onNavigateToHistory) {
-                        Icon(Icons.Default.History, contentDescription = "History")
+                        Icon(Icons.Default.History, contentDescription = stringResource(R.string.cd_history))
                     }
                     IconButton(onClick = { showLanguageSelection = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Select languages")
+                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.cd_select_languages))
                     }
                 }
             )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = onNavigateToImageTranslation) {
-                Icon(Icons.Default.Image, contentDescription = "Translate from image")
+                Icon(Icons.Default.Image, contentDescription = stringResource(R.string.cd_translate_from_image))
             }
         }
     ) { padding ->
@@ -74,20 +93,24 @@ fun TranslationScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                placeholder = { Text("Enter text to translate") },
+                placeholder = { Text(stringResource(R.string.placeholder_enter_text)) },
                 minLines = 3,
                 maxLines = 6,
                 supportingText = {
                     uiState.sourceLanguage?.let { detected ->
-                        Text("Detected: ${detected.language.displayName}")
+                        Text(stringResource(R.string.label_detected, detected.language.displayName))
                     }
                 }
             )
 
             // Selected languages display
-            if (uiState.selectedTargetLanguages.isNotEmpty()) {
+            AnimatedVisibility(
+                visible = uiState.selectedTargetLanguages.isNotEmpty(),
+                enter = fadeIn() + slideInVertically(),
+                exit = fadeOut() + slideOutVertically()
+            ) {
                 Text(
-                    text = "Translating to: ${uiState.selectedTargetLanguages.size} language(s)",
+                    text = stringResource(R.string.label_translating_to, uiState.selectedTargetLanguages.size),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -103,7 +126,7 @@ fun TranslationScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Show Romanization",
+                    text = stringResource(R.string.label_show_romanization),
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Switch(
@@ -114,59 +137,59 @@ fun TranslationScreen(
 
             HorizontalDivider()
 
-            // Translation results area
-            when {
-                uiState.isTranslating -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                }
-                uiState.error != null -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        contentAlignment = Alignment.TopStart
-                    ) {
-                        Text(
-                            text = uiState.error!!,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-                uiState.translations.isNotEmpty() -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(vertical = 8.dp)
-                    ) {
-                        items(
-                            items = uiState.translations,
-                            key = { it.id }
-                        ) { result ->
-                            TranslationResultCard(
-                                result = result,
-                                showRomanization = uiState.showRomanization,
-                                onSpeak = { viewModel.speak(result) },
-                                onCopy = { viewModel.copyToClipboard(result) }
-                            )
+            // Translation results area with crossfade animation
+            Crossfade(
+                targetState = when {
+                    uiState.isTranslating -> TranslationState.Loading
+                    uiState.error != null -> TranslationState.Error
+                    uiState.translations.isNotEmpty() -> TranslationState.Results
+                    else -> TranslationState.Empty
+                },
+                label = "translation_state"
+            ) { state ->
+                when (state) {
+                    TranslationState.Loading -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
                         }
                     }
-                }
-                else -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        contentAlignment = Alignment.TopStart
-                    ) {
-                        Text(
-                            text = "Enter text above to see translation",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                    TranslationState.Error -> {
+                        ErrorState(
+                            title = stringResource(R.string.error_translation_failed),
+                            message = uiState.error!!,
+                            severity = ErrorSeverity.Error,
+                            onRetry = { viewModel.retryTranslation() },
+                            onDismiss = { viewModel.clearError() },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    TranslationState.Results -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(vertical = 8.dp)
+                        ) {
+                            items(
+                                items = uiState.translations,
+                                key = { it.id }
+                            ) { result ->
+                                TranslationResultCard(
+                                    result = result,
+                                    showRomanization = uiState.showRomanization,
+                                    onSpeak = { viewModel.speak(result) },
+                                    onCopy = { viewModel.copyToClipboard(result) }
+                                )
+                            }
+                        }
+                    }
+                    TranslationState.Empty -> {
+                        EmptyState(
+                            icon = Icons.Default.Translate,
+                            title = stringResource(R.string.empty_translation_title),
+                            message = stringResource(R.string.empty_translation_message),
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
@@ -181,4 +204,8 @@ fun TranslationScreen(
             onDismiss = { showLanguageSelection = false }
         )
     }
+}
+
+private enum class TranslationState {
+    Loading, Error, Results, Empty
 }

@@ -17,6 +17,7 @@ room = "2.6.1"
 datastore = "1.1.1"
 navigation = "2.8.5"
 coil = "2.7.0"
+splashscreen = "1.0.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -62,6 +63,9 @@ androidx-datastore-preferences = { group = "androidx.datastore", name = "datasto
 
 # Coil for image loading
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+
+# Splash Screen
+androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashscreen" }
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }

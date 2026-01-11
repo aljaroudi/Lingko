@@ -1,5 +1,9 @@
 package com.aljaroudi.lingko.ui.navigation
 
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,7 +31,15 @@ fun NavGraph(
         navController = navController,
         startDestination = Screen.Translation.route
     ) {
-        composable(Screen.Translation.route) {
+        composable(
+            route = Screen.Translation.route,
+            enterTransition = {
+                fadeIn(animationSpec = tween(300))
+            },
+            exitTransition = {
+                fadeOut(animationSpec = tween(300))
+            }
+        ) {
             TranslationScreen(
                 onNavigateToHistory = {
                     navController.navigate(Screen.History.route)
@@ -41,7 +53,27 @@ fun NavGraph(
             )
         }
 
-        composable(Screen.History.route) {
+        composable(
+            route = Screen.History.route,
+            enterTransition = {
+                slideIntoContainer(
+                    towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                    animationSpec = tween(300)
+                )
+            },
+            exitTransition = {
+                fadeOut(animationSpec = tween(300))
+            },
+            popEnterTransition = {
+                fadeIn(animationSpec = tween(300))
+            },
+            popExitTransition = {
+                slideOutOfContainer(
+                    towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                    animationSpec = tween(300)
+                )
+            }
+        ) {
             HistoryScreen(
                 onNavigateBack = {
                     navController.popBackStack()
@@ -49,7 +81,27 @@ fun NavGraph(
             )
         }
 
-        composable(Screen.ImageTranslation.route) {
+        composable(
+            route = Screen.ImageTranslation.route,
+            enterTransition = {
+                slideIntoContainer(
+                    towards = AnimatedContentTransitionScope.SlideDirection.Up,
+                    animationSpec = tween(300)
+                )
+            },
+            exitTransition = {
+                fadeOut(animationSpec = tween(300))
+            },
+            popEnterTransition = {
+                fadeIn(animationSpec = tween(300))
+            },
+            popExitTransition = {
+                slideOutOfContainer(
+                    towards = AnimatedContentTransitionScope.SlideDirection.Down,
+                    animationSpec = tween(300)
+                )
+            }
+        ) {
             ImageTranslationScreen(
                 onNavigateBack = {
                     navController.popBackStack()
