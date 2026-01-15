@@ -58,9 +58,18 @@ class TranslationViewModel @Inject constructor(
         // Load preferences
         viewModelScope.launch {
             preferencesRepository.selectedLanguages.collect { languages ->
-                _uiState.update {
-                    it.copy(
+                _uiState.update { currentState ->
+                    val newActivePriority = if (currentState.activePriorityLanguage == null ||
+                                                !languages.contains(currentState.activePriorityLanguage)) {
+                        // Set to first language alphabetically if current is not valid
+                        languages.sortedBy { it.displayName }.firstOrNull()
+                    } else {
+                        currentState.activePriorityLanguage
+                    }
+
+                    currentState.copy(
                         selectedTargetLanguages = languages,
+                        activePriorityLanguage = newActivePriority,
                         showRomanization = true
                     )
                 }
@@ -133,11 +142,22 @@ class TranslationViewModel @Inject constructor(
             maxResults = 5
         )
 
-        _uiState.update { 
-            it.copy(
+        _uiState.update { currentState ->
+            // If active priority language is same as new source, switch to another
+            val newActivePriority = if (currentState.activePriorityLanguage == sourceLanguage.language) {
+                currentState.selectedTargetLanguages
+                    .filter { it != sourceLanguage.language }
+                    .sortedBy { it.displayName }
+                    .firstOrNull()
+            } else {
+                currentState.activePriorityLanguage
+            }
+
+            currentState.copy(
                 sourceLanguage = sourceLanguage,
-                possibleSourceLanguages = possibleLanguages
-            ) 
+                possibleSourceLanguages = possibleLanguages,
+                activePriorityLanguage = newActivePriority
+            )
         }
 
         // Use effective source language (manual override or detected)
@@ -158,11 +178,13 @@ class TranslationViewModel @Inject constructor(
         }
 
         // Translate to all selected languages (excluding source)
+        // Prioritize the active language if set
         val results = mutableListOf<TranslationResult>()
         translationRepository.translateToMultiple(
             text = text,
             from = effectiveSource,
-            toLanguages = targetLanguages
+            toLanguages = targetLanguages,
+            priorityLanguage = _uiState.value.activePriorityLanguage
         ).collect { result ->
             // Add romanization if needed
             val withRomanization = if (result.language.script.needsRomanization) {
@@ -241,7 +263,22 @@ class TranslationViewModel @Inject constructor(
     }
 
     fun setManualSourceLanguage(language: Language) {
-        _uiState.update { it.copy(manualSourceLanguage = language) }
+        _uiState.update { currentState ->
+            // If active priority language is same as new source, switch to another
+            val newActivePriority = if (currentState.activePriorityLanguage == language) {
+                currentState.selectedTargetLanguages
+                    .filter { it != language }
+                    .sortedBy { it.displayName }
+                    .firstOrNull()
+            } else {
+                currentState.activePriorityLanguage
+            }
+
+            currentState.copy(
+                manualSourceLanguage = language,
+                activePriorityLanguage = newActivePriority
+            )
+        }
 
         // Re-translate with the new source language
         if (_uiState.value.inputText.isNotBlank()) {
@@ -262,6 +299,13 @@ class TranslationViewModel @Inject constructor(
                 translateText(_uiState.value.inputText)
             }
         }
+    }
+
+    fun setActivePriorityLanguage(language: Language) {
+        _uiState.update { it.copy(activePriorityLanguage = language) }
+
+        // If we already have a translation for this language, no need to re-translate
+        // The UI will automatically show it via the activeTranslation computed property
     }
 
     override fun onCleared() {

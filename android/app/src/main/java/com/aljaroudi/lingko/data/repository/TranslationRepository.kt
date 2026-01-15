@@ -152,9 +152,27 @@ class TranslationRepository @Inject constructor(
     suspend fun translateToMultiple(
         text: String,
         from: Language,
-        toLanguages: Set<Language>
+        toLanguages: Set<Language>,
+        priorityLanguage: Language? = null
     ): Flow<TranslationResult> = channelFlow {
-        toLanguages.map { targetLang ->
+        // If there's a priority language, translate it first
+        if (priorityLanguage != null && toLanguages.contains(priorityLanguage)) {
+            val result = translate(text, from, priorityLanguage)
+            result.onSuccess { translated ->
+                send(
+                    TranslationResult(
+                        language = priorityLanguage,
+                        sourceLanguage = from,
+                        translation = translated,
+                        detectionConfidence = 1.0f
+                    )
+                )
+            }
+        }
+
+        // Translate remaining languages concurrently
+        val remainingLanguages = toLanguages.filter { it != priorityLanguage }
+        remainingLanguages.map { targetLang ->
             async {
                 val result = translate(text, from, targetLang)
                 result.onSuccess { translated ->

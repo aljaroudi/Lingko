@@ -231,11 +231,13 @@ struct TranslationService {
 
     // MARK: - Translation
 
-    /// Translates text to all specified target languages concurrently
+    /// Translates text to all specified target languages with optional prioritization
+    /// - Parameter priorityLanguage: If provided, this language will be translated first before others
     func translateToAll(
         text: String,
         from sourceLanguage: Locale.Language?,
         to targetLanguages: Set<Locale.Language>,
+        priorityLanguage: Locale.Language? = nil,
         includeRomanization: Bool = true,
         romanizationService: RomanizationService = RomanizationService(),
         onEachResult: (@MainActor @Sendable (TranslationResult) async -> Void)? = nil
@@ -267,15 +269,39 @@ struct TranslationService {
             ? romanizationService.romanize(text: text, language: sourceLanguage)
             : nil
 
-        // Use TaskGroup for concurrent translations
-        return await withTaskGroup(of: TranslationResult?.self) { group in
-            for targetLanguage in targetLanguages {
-                // Skip if target is same as source
-                guard targetLanguage != sourceLanguage else {
-                    logger.info("⏭️  Skipping translation to source language: \(targetLanguage.minimalIdentifier)")
-                    continue
-                }
+        var results: [TranslationResult] = []
 
+        // If there's a priority language, translate it first
+        if let priority = priorityLanguage, targetLanguages.contains(priority), priority != sourceLanguage {
+            let status = await getLanguageStatus(from: sourceLanguage, to: priority)
+            if status == .installed {
+                logger.info("🎯 Translating priority language first: \(priority.minimalIdentifier)")
+                if let result = await translateSingle(
+                    text: text,
+                    from: sourceLanguage,
+                    to: priority,
+                    detectionConfidence: confidence,
+                    includeRomanization: includeRomanization,
+                    romanizationService: romanizationService,
+                    sourceRomanization: sourceRomanization
+                ) {
+                    results.append(result)
+                    // Call the completion handler immediately for priority result
+                    if let handler = onEachResult {
+                        await handler(result)
+                    }
+                }
+            }
+        }
+
+        // Get remaining languages (excluding priority if already translated)
+        let remainingLanguages = targetLanguages.filter { language in
+            language != sourceLanguage && !results.contains(where: { $0.language == language })
+        }
+
+        // Use TaskGroup for concurrent translations of remaining languages
+        let remainingResults = await withTaskGroup(of: TranslationResult?.self) { group in
+            for targetLanguage in remainingLanguages {
                 // Check availability before attempting translation
                 let status = await getLanguageStatus(from: sourceLanguage, to: targetLanguage)
                 guard status == .installed else {
@@ -296,12 +322,12 @@ struct TranslationService {
                 }
             }
 
-            var results: [TranslationResult] = []
+            var groupResults: [TranslationResult] = []
             var failedCount = 0
 
             for await result in group {
                 if let result {
-                    results.append(result)
+                    groupResults.append(result)
                     // Call the completion handler immediately for each result
                     if let handler = onEachResult {
                         await handler(result)
@@ -311,18 +337,22 @@ struct TranslationService {
                 }
             }
 
-            let attemptedCount = targetLanguages.count - (targetLanguages.contains(sourceLanguage) ? 1 : 0)
-            logger.info("✅ Completed \(results.count)/\(attemptedCount) translations (\(failedCount) failed or skipped)")
-
-            if results.isEmpty && attemptedCount > 0 {
-                logger.error("❌ No translations completed. Possible reasons:")
-                logger.error("   • Language packs not installed")
-                logger.error("   • Running on simulator (limited Translation support)")
-                logger.error("   • All selected languages are the same as source")
-            }
-
-            return results.sorted { $0.languageName < $1.languageName }
+            return groupResults
         }
+
+        results.append(contentsOf: remainingResults)
+
+        let attemptedCount = targetLanguages.count - (targetLanguages.contains(sourceLanguage) ? 1 : 0)
+        logger.info("✅ Completed \(results.count)/\(attemptedCount) translations")
+
+        if results.isEmpty && attemptedCount > 0 {
+            logger.error("❌ No translations completed. Possible reasons:")
+            logger.error("   • Language packs not installed")
+            logger.error("   • Running on simulator (limited Translation support)")
+            logger.error("   • All selected languages are the same as source")
+        }
+
+        return results.sorted { $0.languageName < $1.languageName }
     }
 
     // MARK: - Private Methods
