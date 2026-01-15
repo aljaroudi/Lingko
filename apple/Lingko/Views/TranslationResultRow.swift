@@ -23,18 +23,6 @@ struct TranslationResultRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Header: Language name + confidence
-            HStack {
-                Text(result.languageName)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                confidenceIndicator
-            }
-
             // Translation text
             Text(result.translation)
                 .font(.body)
@@ -127,40 +115,6 @@ struct TranslationResultRow: View {
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .sensoryFeedback(.success, trigger: showCopyConfirmation)
-    }
-
-    // MARK: - Confidence Indicator
-
-    @ViewBuilder
-    private var confidenceIndicator: some View {
-        HStack(spacing: 4) {
-            Image(systemName: confidenceIcon)
-                .font(.caption2)
-            Text(result.confidencePercentage)
-                .font(.caption2)
-                .fontWeight(.medium)
-        }
-        .foregroundStyle(confidenceColor)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(confidenceColor.opacity(0.15))
-        .clipShape(Capsule())
-    }
-
-    private var confidenceIcon: String {
-        switch result.detectionConfidence {
-        case 0.8...1.0: return "checkmark.circle.fill"
-        case 0.5..<0.8: return "exclamationmark.circle.fill"
-        default: return "questionmark.circle.fill"
-        }
-    }
-
-    private var confidenceColor: Color {
-        switch result.detectionConfidence {
-        case 0.8...1.0: return .green
-        case 0.5..<0.8: return .orange
-        default: return .red
-        }
     }
 
     // MARK: - Actions

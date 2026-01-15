@@ -20,6 +20,7 @@ struct TranslationView: View {
     @Binding var inputText: String
     @State private var translations: [TranslationResult] = []
     @State private var selectedLanguages: Set<Locale.Language> = LanguagePreferences.loadSelectedLanguages()
+    @State private var activePriorityLanguage: Locale.Language?
     @State private var isTranslating = false
     @State private var loadingLanguages: Set<Locale.Language> = []
     @State private var showLanguageSelection = false
@@ -141,11 +142,28 @@ struct TranslationView: View {
                 }
                 .onChange(of: selectedLanguages) { _, newLanguages in
                     LanguagePreferences.saveSelectedLanguages(newLanguages)
+
+                    // Set active priority language if not set or if current one is not in new selection
+                    if activePriorityLanguage == nil || !newLanguages.contains(activePriorityLanguage!) {
+                        activePriorityLanguage = newLanguages.sorted(by: { l1, l2 in
+                            (Locale.current.localizedString(forLanguageCode: l1.minimalIdentifier) ?? l1.minimalIdentifier) <
+                            (Locale.current.localizedString(forLanguageCode: l2.minimalIdentifier) ?? l2.minimalIdentifier)
+                        }).first
+                    }
                 }
                 .onChange(of: selectedSourceLanguage) { _, newLanguage in
                     // Update current source language when manually selected
                     if let newLanguage = newLanguage {
                         currentSourceLanguage = newLanguage
+
+                        // If active priority language is same as new source, switch to another
+                        if activePriorityLanguage == newLanguage {
+                            let availableTargets = selectedLanguages.filter { $0 != newLanguage }
+                            activePriorityLanguage = availableTargets.sorted(by: { l1, l2 in
+                                (Locale.current.localizedString(forLanguageCode: l1.minimalIdentifier) ?? l1.minimalIdentifier) <
+                                (Locale.current.localizedString(forLanguageCode: l2.minimalIdentifier) ?? l2.minimalIdentifier)
+                            }).first
+                        }
                     } else if !inputText.isEmpty {
                         // If auto-detect is selected, trigger translation to recalculate
                         handleTextChange(inputText)
@@ -172,6 +190,14 @@ struct TranslationView: View {
                 }
                 .task {
                     await loadInstalledLanguages()
+
+                    // Initialize active priority language on first load
+                    if activePriorityLanguage == nil && !selectedLanguages.isEmpty {
+                        activePriorityLanguage = selectedLanguages.sorted(by: { l1, l2 in
+                            (Locale.current.localizedString(forLanguageCode: l1.minimalIdentifier) ?? l1.minimalIdentifier) <
+                            (Locale.current.localizedString(forLanguageCode: l2.minimalIdentifier) ?? l2.minimalIdentifier)
+                        }).first
+                    }
                 }
                 .sensoryFeedback(.impact(weight: .light), trigger: translations.count)
                 .sensoryFeedback(.error, trigger: errorTrigger)
@@ -185,6 +211,12 @@ struct TranslationView: View {
             inputSection
 
             Divider()
+
+            // Language selector section (only show if languages are selected and text is not empty)
+            if !selectedLanguages.isEmpty && !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                languageSelectorSection
+                Divider()
+            }
 
             // Results section
             resultsSection
@@ -266,6 +298,44 @@ struct TranslationView: View {
         .padding()
     }
 
+    // MARK: - Language Selector Section
+
+    @ViewBuilder
+    private var languageSelectorSection: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                // Filter out source language from target languages
+                let targetLanguages = selectedLanguages.filter { $0 != currentSourceLanguage }
+
+                ForEach(Array(targetLanguages).sorted(by: { l1, l2 in
+                    (Locale.current.localizedString(forLanguageCode: l1.minimalIdentifier) ?? l1.minimalIdentifier) <
+                    (Locale.current.localizedString(forLanguageCode: l2.minimalIdentifier) ?? l2.minimalIdentifier)
+                }), id: \.minimalIdentifier) { language in
+                    let isActive = activePriorityLanguage?.minimalIdentifier == language.minimalIdentifier
+                    let languageName = Locale.current.localizedString(forLanguageCode: language.minimalIdentifier) ?? language.minimalIdentifier
+
+                    Button {
+                        // Set this language as the active priority language
+                        activePriorityLanguage = language
+                    } label: {
+                        Text(languageName)
+                            .font(.subheadline)
+                            .fontWeight(isActive ? .semibold : .regular)
+                            .foregroundStyle(isActive ? .white : .primary)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(isActive ? Color.accentColor : Color(.secondarySystemFill))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 12)
+        }
+        .background(Color(.systemGroupedBackground))
+    }
+
     // MARK: - Results Section
 
     @ViewBuilder
@@ -283,30 +353,27 @@ struct TranslationView: View {
         } else {
             ScrollView {
                 LazyVStack(spacing: 16) {
-                    // Show completed translations
-                    ForEach(translations) { result in
-                        TranslationResultRow(
-                            result: result,
-                            audioService: audioService,
-                            aiService: aiService,
-                            speechRate: Float(speechRate)
-                        )
-                        .transition(.asymmetric(
-                            insertion: .scale(scale: 0.9).combined(with: .opacity),
-                            removal: .opacity
-                        ))
-                    }
-
-                    // Show skeleton loaders for languages currently being translated
-                    ForEach(Array(loadingLanguages.sorted(by: { l1, l2 in
-                        (Locale.current.localizedString(forLanguageCode: l1.minimalIdentifier) ?? l1.minimalIdentifier) <
-                        (Locale.current.localizedString(forLanguageCode: l2.minimalIdentifier) ?? l2.minimalIdentifier)
-                    })), id: \.minimalIdentifier) { language in
-                        SkeletonCard()
+                    // Show only the active priority language's translation
+                    if let activeLanguage = activePriorityLanguage {
+                        if let activeTranslation = translations.first(where: { $0.language == activeLanguage }) {
+                            TranslationResultRow(
+                                result: activeTranslation,
+                                audioService: audioService,
+                                aiService: aiService,
+                                speechRate: Float(speechRate)
+                            )
                             .transition(.asymmetric(
                                 insertion: .scale(scale: 0.9).combined(with: .opacity),
                                 removal: .opacity
                             ))
+                        } else if loadingLanguages.contains(activeLanguage) {
+                            // Show skeleton loader for active language being translated
+                            SkeletonCard()
+                                .transition(.asymmetric(
+                                    insertion: .scale(scale: 0.9).combined(with: .opacity),
+                                    removal: .opacity
+                                ))
+                        }
                     }
                 }
                 .padding()
@@ -426,6 +493,15 @@ struct TranslationView: View {
             // Update current source language for UI display
             currentSourceLanguage = sourceLanguage
 
+            // If active priority language is same as source, switch to another available target
+            if activePriorityLanguage == sourceLanguage {
+                let availableTargets = selectedLanguages.filter { $0 != sourceLanguage && installedLanguages.contains($0) }
+                activePriorityLanguage = availableTargets.sorted(by: { l1, l2 in
+                    (Locale.current.localizedString(forLanguageCode: l1.minimalIdentifier) ?? l1.minimalIdentifier) <
+                    (Locale.current.localizedString(forLanguageCode: l2.minimalIdentifier) ?? l2.minimalIdentifier)
+                }).first
+            }
+
             // Filter target languages to only downloaded ones
             let downloadedTargetLanguages = selectedLanguages.filter { installedLanguages.contains($0) }
 
@@ -444,10 +520,12 @@ struct TranslationView: View {
             translations = []
 
             // Perform translation with feature flags and progressive updates
+            // Prioritize the active language if set
             let results = await service.translateToAll(
                 text: text,
                 from: sourceLanguage,
                 to: downloadedTargetLanguages,
+                priorityLanguage: activePriorityLanguage,
                 includeRomanization: includeRomanization,
                 onEachResult: { @MainActor result in
                     // Add or update translation as it arrives

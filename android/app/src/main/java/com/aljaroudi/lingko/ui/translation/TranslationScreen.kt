@@ -3,6 +3,7 @@ package com.aljaroudi.lingko.ui.translation
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Translate
@@ -27,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aljaroudi.lingko.R
+import com.aljaroudi.lingko.domain.model.Language
 import com.aljaroudi.lingko.ui.components.EmptyState
 import com.aljaroudi.lingko.ui.components.ErrorState
 import com.aljaroudi.lingko.ui.components.ErrorSeverity
@@ -165,12 +167,30 @@ fun TranslationScreen(
 
             HorizontalDivider()
 
+            // Language selector (only show if languages are selected and text is not empty)
+            if (uiState.selectedTargetLanguages.isNotEmpty() && uiState.inputText.isNotBlank()) {
+                // Filter out source language from target languages
+                val targetLanguages = uiState.selectedTargetLanguages
+                    .filter { it != uiState.effectiveSourceLanguage }
+                    .sortedBy { it.displayName }
+
+                if (targetLanguages.isNotEmpty()) {
+                    LanguageChipRow(
+                        languages = targetLanguages,
+                        activeLanguage = uiState.activePriorityLanguage,
+                        onLanguageSelected = viewModel::setActivePriorityLanguage,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    HorizontalDivider()
+                }
+            }
+
             // Translation results area with crossfade animation
             Crossfade(
                 targetState = when {
                     uiState.isTranslating -> TranslationState.Loading
                     uiState.error != null -> TranslationState.Error
-                    uiState.translations.isNotEmpty() -> TranslationState.Results
+                    uiState.activeTranslation != null -> TranslationState.Results
                     else -> TranslationState.Empty
                 },
                 label = "translation_state"
@@ -195,20 +215,20 @@ fun TranslationScreen(
                         )
                     }
                     TranslationState.Results -> {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(vertical = 8.dp)
-                        ) {
-                            items(
-                                items = uiState.translations,
-                                key = { it.id }
-                            ) { result ->
-                                TranslationResultCard(
-                                    result = result,
-                                    showRomanization = true,
-                                    onSpeak = { viewModel.speak(result) },
-                                    onCopy = { viewModel.copyToClipboard(result) }
-                                )
+                        // Show only the active priority language's translation
+                        uiState.activeTranslation?.let { activeResult ->
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(vertical = 8.dp)
+                            ) {
+                                item {
+                                    TranslationResultCard(
+                                        result = activeResult,
+                                        showRomanization = true,
+                                        onSpeak = { viewModel.speak(activeResult) },
+                                        onCopy = { viewModel.copyToClipboard(activeResult) }
+                                    )
+                                }
                             }
                         }
                     }
@@ -240,6 +260,43 @@ fun TranslationScreen(
             onLanguageSelected = viewModel::setManualSourceLanguage,
             onDismiss = { showSourceLanguageSelection = false }
         )
+    }
+}
+
+@Composable
+private fun LanguageChipRow(
+    languages: List<Language>,
+    activeLanguage: Language?,
+    onLanguageSelected: (Language) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyRow(
+        modifier = modifier
+            .padding(vertical = 12.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(
+            count = languages.size,
+            key = { index -> languages[index].code }
+        ) { index ->
+            val language = languages[index]
+            val isActive = activeLanguage == language
+            FilterChip(
+                selected = isActive,
+                onClick = { onLanguageSelected(language) },
+                label = {
+                    Text(
+                        text = language.displayName,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                )
+            )
+        }
     }
 }
 
