@@ -86,6 +86,15 @@ fun TranslationScreen(
                 .padding(padding)
                 .imePadding()
         ) {
+            // Source language selector
+            SourceLanguageChipRow(
+                availableLanguages = uiState.selectedTargetLanguages.sortedBy { it.displayName },
+                selectedLanguage = uiState.manualSourceLanguage,
+                onLanguageSelected = viewModel::setManualSourceLanguage,
+                onAutoSelected = viewModel::clearManualSourceLanguage,
+                modifier = Modifier.fillMaxWidth()
+            )
+
             // Input field
             TextField(
                 value = uiState.inputText,
@@ -96,74 +105,6 @@ fun TranslationScreen(
                 minLines = 3,
                 maxLines = 6
             )
-            
-            // Source language selector
-            if (uiState.sourceLanguage != null || uiState.manualSourceLanguage != null) {
-                val effectiveSource = uiState.effectiveSourceLanguage
-                val isManual = uiState.manualSourceLanguage != null
-                
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            if (isManual) Icons.Default.Edit else Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            tint = if (isManual) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = if (isManual) {
-                                "Source: ${effectiveSource?.displayName ?: ""}"
-                            } else {
-                                stringResource(R.string.label_detected, effectiveSource?.displayName ?: "")
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (isManual) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-                        )
-                    }
-                    
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        if (isManual) {
-                            TextButton(
-                                onClick = { viewModel.clearManualSourceLanguage() },
-                                contentPadding = PaddingValues(horizontal = 8.dp)
-                            ) {
-                                Text(
-                                    "Auto",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
-                        TextButton(
-                            onClick = { showSourceLanguageSelection = true },
-                            contentPadding = PaddingValues(horizontal = 8.dp)
-                        ) {
-                            Text(
-                                "Change",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
-                }
-            }
 
             HorizontalDivider()
 
@@ -260,6 +201,63 @@ fun TranslationScreen(
             onLanguageSelected = viewModel::setManualSourceLanguage,
             onDismiss = { showSourceLanguageSelection = false }
         )
+    }
+}
+
+@Composable
+private fun SourceLanguageChipRow(
+    availableLanguages: List<Language>,
+    selectedLanguage: Language?,
+    onLanguageSelected: (Language) -> Unit,
+    onAutoSelected: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyRow(
+        modifier = modifier
+            .padding(vertical = 12.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Auto option
+        item(key = "auto") {
+            FilterChip(
+                selected = selectedLanguage == null,
+                onClick = onAutoSelected,
+                label = {
+                    Text(
+                        text = "Auto",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                )
+            )
+        }
+
+        // Language options
+        items(
+            count = availableLanguages.size,
+            key = { index -> availableLanguages[index].code }
+        ) { index ->
+            val language = availableLanguages[index]
+            val isActive = selectedLanguage == language
+            FilterChip(
+                selected = isActive,
+                onClick = { onLanguageSelected(language) },
+                label = {
+                    Text(
+                        text = language.displayName,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                )
+            )
+        }
     }
 }
 

@@ -86,10 +86,47 @@ struct SupportedLanguages {
             ?? language.minimalIdentifier
     }
 
+    /// Normalize a language code by extracting the base language
+    /// Examples: "en-US" → "en", "zh-Hans" → "zh-Hans" (kept as is), "zh" → "zh"
+    static func normalizeCode(_ code: String) -> String {
+        // For codes we explicitly define (like zh-Hans, zh-Hant, pt-BR), keep them as is
+        if all.contains(where: { $0.code == code }) {
+            return code
+        }
+
+        // Extract base language code (e.g., "en" from "en-US")
+        let components = code.components(separatedBy: "-")
+        return components.first ?? code
+    }
+
+    /// Find a matching language for a given code, handling variations
+    /// Tries exact match first, then normalized match, then base language match
+    static func findMatchingLanguage(for code: String) -> Locale.Language? {
+        // Try exact match first
+        if let match = all.first(where: { $0.code == code }) {
+            return match.language
+        }
+
+        // Try normalized code
+        let normalized = normalizeCode(code)
+        if let match = all.first(where: { $0.code == normalized }) {
+            return match.language
+        }
+
+        // Try base language match (e.g., "zh" matches "zh-Hans" or "zh-Hant")
+        let baseCode = code.components(separatedBy: "-").first ?? code
+        if let match = all.first(where: { $0.code.hasPrefix(baseCode) || $0.code == baseCode }) {
+            return match.language
+        }
+
+        return nil
+    }
+
     /// Validate a set of language codes and return valid languages
+    /// Now uses fuzzy matching to handle language code variations
     static func validate(codes: [String]) -> [Locale.Language] {
         codes.compactMap { code in
-            all.first(where: { $0.code == code })?.language
+            findMatchingLanguage(for: code)
         }
     }
 }

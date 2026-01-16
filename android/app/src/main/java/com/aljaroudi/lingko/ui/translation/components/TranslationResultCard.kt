@@ -24,70 +24,66 @@ fun TranslationResultCard(
     onCopy: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .padding(16.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
+        // Romanization (if available)
+        if (result.romanization != null) {
+            Text(
+                text = result.romanization,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+
+        // Translation with RTL support
+        CompositionLocalProvider(
+            LocalLayoutDirection provides if (result.language.script.isRTL) {
+                LayoutDirection.Rtl
+            } else {
+                LayoutDirection.Ltr
+            }
         ) {
-            // Romanization (if available)
-            if (result.romanization != null) {
-                Text(
-                    text = result.romanization,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            Text(
+                text = result.translation,
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Actions
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilledTonalButton(
+                onClick = onSpeak,
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                    contentDescription = stringResource(R.string.cd_speak_translation),
+                    modifier = Modifier.size(18.dp)
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(stringResource(R.string.button_speak))
             }
 
-            // Translation with RTL support
-            CompositionLocalProvider(
-                LocalLayoutDirection provides if (result.language.script.isRTL) {
-                    LayoutDirection.Rtl
-                } else {
-                    LayoutDirection.Ltr
-                }
+            OutlinedButton(
+                onClick = onCopy,
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                Text(
-                    text = result.translation,
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.fillMaxWidth()
+                Icon(
+                    imageVector = Icons.Default.ContentCopy,
+                    contentDescription = stringResource(R.string.cd_copy_translation),
+                    modifier = Modifier.size(18.dp)
                 )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Actions
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilledTonalButton(
-                    onClick = onSpeak,
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                        contentDescription = stringResource(R.string.cd_speak_translation),
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(stringResource(R.string.button_speak))
-                }
-
-                OutlinedButton(
-                    onClick = onCopy,
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ContentCopy,
-                        contentDescription = stringResource(R.string.cd_copy_translation),
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(stringResource(R.string.button_copy))
-                }
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(stringResource(R.string.button_copy))
             }
         }
     }

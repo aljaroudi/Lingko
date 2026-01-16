@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import PhotosUI
+import Translation
 
 struct TranslationView: View {
     @Environment(\.modelContext) private var modelContext
@@ -191,6 +192,17 @@ struct TranslationView: View {
                 .task {
                     await loadInstalledLanguages()
 
+                    // Validate that selected languages are still installed
+                    // Remove any languages that are no longer available
+                    let stillInstalled = selectedLanguages.filter { installedLanguages.contains($0) }
+                    if stillInstalled.count != selectedLanguages.count {
+                        selectedLanguages = stillInstalled
+                        // Save updated selection if languages were removed
+                        if !stillInstalled.isEmpty {
+                            LanguagePreferences.saveSelectedLanguages(stillInstalled)
+                        }
+                    }
+
                     // Initialize active priority language on first load
                     if activePriorityLanguage == nil && !selectedLanguages.isEmpty {
                         activePriorityLanguage = selectedLanguages.sorted(by: { l1, l2 in
@@ -228,39 +240,23 @@ struct TranslationView: View {
     @ViewBuilder
     private var inputSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Spacer()
-
-                if let sourceLanguage = currentSourceLanguage {
-                    Button {
-                        showSourceLanguagePicker = true
-                    } label: {
-                        HStack(spacing: 4) {
-                            if selectedSourceLanguage != nil {
-                                Image(systemName: "hand.tap.fill")
-                                    .font(.caption2)
-                            }
-                            Text(Locale.current.localizedString(forLanguageCode: sourceLanguage.minimalIdentifier) ?? sourceLanguage.minimalIdentifier)
-                                .font(.caption)
-                            // Show confidence indicator if low confidence and not manually selected
-                            if selectedSourceLanguage == nil,
-                               let detected = detectedLanguages.first(where: { $0.language == sourceLanguage }),
-                               detected.confidence < 0.8 {
-                                Image(systemName: "questionmark.circle")
-                                    .font(.caption2)
-                            }
-                            Image(systemName: "chevron.down")
-                                .font(.caption2)
-                        }
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color(.tertiarySystemFill))
-                        .clipShape(Capsule())
+            // Source language chip selector
+            SourceLanguageChipRow(
+                availableLanguages: Array(selectedLanguages).sorted(by: { l1, l2 in
+                    (Locale.current.localizedString(forLanguageCode: l1.minimalIdentifier) ?? l1.minimalIdentifier) <
+                    (Locale.current.localizedString(forLanguageCode: l2.minimalIdentifier) ?? l2.minimalIdentifier)
+                }),
+                selectedLanguage: selectedSourceLanguage,
+                onLanguageSelected: { language in
+                    selectedSourceLanguage = language
+                },
+                onAutoSelected: {
+                    selectedSourceLanguage = nil
+                    if !inputText.isEmpty {
+                        handleTextChange(inputText)
                     }
-                    .buttonStyle(.plain)
                 }
-            }
+            )
 
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $inputText)
@@ -270,7 +266,7 @@ struct TranslationView: View {
                     .onChange(of: inputText) { _, newValue in
                         handleTextChange(newValue)
                     }
-                
+
                 if inputText.isEmpty {
                     Text("Enter text")
                         .foregroundStyle(Color(.placeholderText))
@@ -615,26 +611,27 @@ struct TranslationView: View {
     }
     
     private func loadInstalledLanguages() async {
-        // Check which languages are installed by testing against a reference language
-        let referenceLanguage = Locale.Language(identifier: "en")
         var installed: Set<Locale.Language> = []
 
+        // Use a reference language to check installation status
+        // We'll use English as the reference since it's commonly installed
+        let referenceLanguage = Locale.Language(identifier: "en")
+
+        // Check each language in our curated list to see if it's actually installed
         for languageInfo in SupportedLanguages.all {
             let language = languageInfo.language
 
-            // Check if this language pair is installed
-            let isInstalled = await service.isLanguageInstalled(
-                from: referenceLanguage,
-                to: language
-            )
-            if isInstalled {
+            // Check if this language is installed by checking translation pair availability
+            let status = await service.getLanguageStatus(from: referenceLanguage, to: language)
+
+            if status == .installed {
                 installed.insert(language)
             }
-        }
 
-        // Always include system language (it's always downloaded even if not detected)
-        if let systemLang = SupportedLanguages.deviceLanguage {
-            installed.insert(systemLang)
+            // Also check the reverse direction and add reference language itself
+            if language.minimalIdentifier == referenceLanguage.minimalIdentifier {
+                installed.insert(language)
+            }
         }
 
         installedLanguages = installed
@@ -863,6 +860,58 @@ struct SourceLanguagePickerView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Source Language Chip Row
+
+struct SourceLanguageChipRow: View {
+    let availableLanguages: [Locale.Language]
+    let selectedLanguage: Locale.Language?
+    let onLanguageSelected: (Locale.Language) -> Void
+    let onAutoSelected: () -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                // Auto option
+                Button {
+                    onAutoSelected()
+                } label: {
+                    Text("Auto")
+                        .font(.subheadline)
+                        .fontWeight(selectedLanguage == nil ? .semibold : .regular)
+                        .foregroundStyle(selectedLanguage == nil ? .white : .primary)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(selectedLanguage == nil ? Color.accentColor : Color(.secondarySystemFill))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                // Language options
+                ForEach(availableLanguages, id: \.minimalIdentifier) { language in
+                    let isActive = selectedLanguage?.minimalIdentifier == language.minimalIdentifier
+                    let languageName = Locale.current.localizedString(forLanguageCode: language.minimalIdentifier) ?? language.minimalIdentifier
+
+                    Button {
+                        onLanguageSelected(language)
+                    } label: {
+                        Text(languageName)
+                            .font(.subheadline)
+                            .fontWeight(isActive ? .semibold : .regular)
+                            .foregroundStyle(isActive ? .white : .primary)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(isActive ? Color.accentColor : Color(.secondarySystemFill))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal)
+        }
+        .padding(.vertical, 8)
     }
 }
 
