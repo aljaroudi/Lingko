@@ -115,6 +115,10 @@ struct TranslationResultRow: View {
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .sensoryFeedback(.success, trigger: showCopyConfirmation)
+        .onChange(of: result.id) { _, _ in
+            // Reset analysis when translation changes
+            analysis = nil
+        }
     }
 
     // MARK: - Actions

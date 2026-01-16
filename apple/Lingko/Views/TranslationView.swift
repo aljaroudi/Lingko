@@ -84,11 +84,9 @@ struct TranslationView: View {
                         .accessibilityHint("Open app settings")
                     }
 
-                    ToolbarItem(placement: .primaryAction) {
+                    ToolbarItemGroup(placement: .topBarTrailing) {
                         languageSelectionButton
-                    }
 
-                    ToolbarItem(placement: .secondaryAction) {
                         PhotosPicker(
                             selection: $selectedPhotoItem,
                             matching: .images

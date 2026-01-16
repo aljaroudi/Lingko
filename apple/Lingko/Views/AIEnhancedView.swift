@@ -57,6 +57,15 @@ struct AIEnhancedView: View {
 //                askQuestionButton
 //            }
         }
+        .onChange(of: translation.id) { _, _ in
+            // Reset all AI state when translation changes
+            exampleSentences = []
+            alternatives = []
+            culturalNotes = nil
+            isExamplesExpanded = false
+            isAlternativesExpanded = false
+            isCulturalNotesExpanded = false
+        }
     }
 
     // MARK: - Formality Indicator

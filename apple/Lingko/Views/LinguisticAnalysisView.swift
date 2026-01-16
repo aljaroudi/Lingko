@@ -103,12 +103,20 @@ struct TokenChip: View {
                 .fontWeight(.medium)
                 .foregroundStyle(.primary)
 
-            if let lemma = token.lemma, lemma != token.text {
-                Text(lemma)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .italic()
+            // Always reserve space for lemma to maintain equal height
+            Group {
+                if let lemma = token.lemma, lemma != token.text {
+                    Text(lemma)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .italic()
+                } else {
+                    Text(" ")
+                        .font(.caption2)
+                        .opacity(0)
+                }
             }
+            .frame(height: 14) // Fixed height for lemma section
 
             Text(token.posDescription)
                 .font(.caption2)
