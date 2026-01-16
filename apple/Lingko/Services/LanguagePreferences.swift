@@ -24,13 +24,15 @@ struct LanguagePreferences {
     }
 
     /// Load selected languages from UserDefaults
+    /// Note: This only validates against the supported language list, not actual installation status.
+    /// Call sites should further validate that languages are still installed on the device.
     static func loadSelectedLanguages() -> Set<Locale.Language> {
         guard let languageCodes = UserDefaults.standard.array(forKey: selectedLanguagesKey) as? [String] else {
             // Return empty set - will be populated with downloaded languages on first launch
             return []
         }
 
-        // Validate codes against supported list
+        // Validate codes against supported list (now with fuzzy matching for code variations)
         let validLanguages = SupportedLanguages.validate(codes: languageCodes)
 
         // Return validated languages (even if below minimum - will be handled in UI)

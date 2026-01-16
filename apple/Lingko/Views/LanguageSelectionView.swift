@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Translation
 
 struct LanguageSelectionView: View {
     @Binding var selectedLanguages: Set<Locale.Language>
@@ -179,20 +180,25 @@ struct LanguageSelectionView: View {
     private func loadSupportedLanguages() async {
         isLoading = true
 
-        // Check which languages are installed
-        // Use English as the reference language to check availability
-        let referenceLanguage = Locale.Language(identifier: "en")
         var installed: Set<Locale.Language> = []
 
+        // Use a reference language to check installation status
+        // We'll use English as the reference since it's commonly installed
+        let referenceLanguage = Locale.Language(identifier: "en")
+
+        // Check each language in our curated list to see if it's actually installed
         for languageInfo in SupportedLanguages.all {
             let language = languageInfo.language
 
-            // Check if this language pair is installed
-            let isInstalled = await service.isLanguageInstalled(
-                from: referenceLanguage,
-                to: language
-            )
-            if isInstalled {
+            // Check if this language is installed by checking translation pair availability
+            let status = await service.getLanguageStatus(from: referenceLanguage, to: language)
+
+            if status == .installed {
+                installed.insert(language)
+            }
+
+            // Also check the reverse direction and add reference language itself
+            if language.minimalIdentifier == referenceLanguage.minimalIdentifier {
                 installed.insert(language)
             }
         }
