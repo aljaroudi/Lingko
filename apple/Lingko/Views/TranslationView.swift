@@ -20,16 +20,19 @@ struct TranslationView: View {
     @State private var tagService = TagService()
     @Binding var inputText: String
     @State private var translations: [TranslationResult] = []
-    @State private var selectedLanguages: Set<Locale.Language> = LanguagePreferences.loadSelectedLanguages()
     @State private var activePriorityLanguage: Locale.Language?
     @State private var isTranslating = false
     @State private var loadingLanguages: Set<Locale.Language> = []
-    @State private var showLanguageSelection = false
     @State private var showImageTranslation = false
     @State private var showSettings = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var selectedImage: UIImage?
-    
+
+    // Computed property - auto-use all installed languages
+    private var selectedLanguages: Set<Locale.Language> {
+        installedLanguages
+    }
+
     // Computed binding that only shows sheet when image is available
     private var showImageTranslationBinding: Binding<Bool> {
         Binding(
@@ -85,8 +88,6 @@ struct TranslationView: View {
                     }
 
                     ToolbarItemGroup(placement: .topBarTrailing) {
-                        languageSelectionButton
-
                         PhotosPicker(
                             selection: $selectedPhotoItem,
                             matching: .images
@@ -102,9 +103,6 @@ struct TranslationView: View {
                             Image(systemName: "keyboard.chevron.compact.down")
                         }
                     }
-                }
-                .sheet(isPresented: $showLanguageSelection) {
-                    LanguageSelectionView(selectedLanguages: $selectedLanguages)
                 }
                 .sheet(isPresented: $showSettings) {
                     SettingsView()
@@ -137,17 +135,6 @@ struct TranslationView: View {
                     } else {
                         // Fallback empty view (should never happen due to binding)
                         EmptyView()
-                    }
-                }
-                .onChange(of: selectedLanguages) { _, newLanguages in
-                    LanguagePreferences.saveSelectedLanguages(newLanguages)
-
-                    // Set active priority language if not set or if current one is not in new selection
-                    if activePriorityLanguage == nil || !newLanguages.contains(activePriorityLanguage!) {
-                        activePriorityLanguage = newLanguages.sorted(by: { l1, l2 in
-                            (Locale.current.localizedString(forLanguageCode: l1.minimalIdentifier) ?? l1.minimalIdentifier) <
-                            (Locale.current.localizedString(forLanguageCode: l2.minimalIdentifier) ?? l2.minimalIdentifier)
-                        }).first
                     }
                 }
                 .onChange(of: selectedSourceLanguage) { _, newLanguage in
@@ -189,17 +176,6 @@ struct TranslationView: View {
                 }
                 .task {
                     await loadInstalledLanguages()
-
-                    // Validate that selected languages are still installed
-                    // Remove any languages that are no longer available
-                    let stillInstalled = selectedLanguages.filter { installedLanguages.contains($0) }
-                    if stillInstalled.count != selectedLanguages.count {
-                        selectedLanguages = stillInstalled
-                        // Save updated selection if languages were removed
-                        if !stillInstalled.isEmpty {
-                            LanguagePreferences.saveSelectedLanguages(stillInstalled)
-                        }
-                    }
 
                     // Initialize active priority language on first load
                     if activePriorityLanguage == nil && !selectedLanguages.isEmpty {
@@ -334,14 +310,7 @@ struct TranslationView: View {
 
     @ViewBuilder
     private var resultsSection: some View {
-        if selectedLanguages.isEmpty {
-            EmptyStateView(
-                configuration: .noLanguagesSelected {
-                    showLanguageSelection = true
-                }
-            )
-            .transition(.opacity)
-        } else if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             EmptyStateView(configuration: .translationEmpty)
                 .transition(.opacity)
         } else {
@@ -375,27 +344,6 @@ struct TranslationView: View {
             .scrollDismissesKeyboard(.interactively)
             .background(Color(.systemGroupedBackground))
         }
-    }
-
-    // MARK: - Language Selection Button
-
-    @ViewBuilder
-    private var languageSelectionButton: some View {
-        Button {
-            showLanguageSelection = true
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "globe")
-                Text("\(selectedLanguages.count)")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-            }
-        }
-        .buttonStyle(.bordered)
-        .buttonBorderShape(.capsule)
-        .accessibilityLabel("Select target languages")
-        .accessibilityValue("\(selectedLanguages.count) languages selected")
-        .accessibilityHint("Opens language selection sheet")
     }
 
     // MARK: - Translation Logic
@@ -633,12 +581,6 @@ struct TranslationView: View {
         }
 
         installedLanguages = installed
-
-        // Auto-select all downloaded languages on first launch
-        if !LanguagePreferences.hasSavedPreferences() {
-            selectedLanguages = installed
-            LanguagePreferences.saveSelectedLanguages(installed)
-        }
     }
 }
 

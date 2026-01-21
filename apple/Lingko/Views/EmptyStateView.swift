@@ -110,6 +110,22 @@ struct EmptyStateConfiguration: Identifiable {
         )
     }
 
+    static func insufficientLanguages(installedCount: Int, action: @escaping () -> Void) -> EmptyStateConfiguration {
+        EmptyStateConfiguration(
+            iconName: "arrow.down.circle",
+            iconColor: .orange,
+            title: "Download More Languages",
+            message: installedCount == 0
+                ? "Download at least 2 languages to start translating"
+                : "You have \(installedCount) language. Download at least one more to start translating",
+            action: EmptyStateAction(
+                title: "Open iOS Settings",
+                iconName: "gear",
+                handler: action
+            )
+        )
+    }
+
     static let cameraEmpty = EmptyStateConfiguration(
         iconName: "camera",
         iconColor: .purple,
