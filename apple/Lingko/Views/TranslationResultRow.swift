@@ -112,7 +112,7 @@ struct TranslationResultRow: View {
             .labelStyle(.iconOnly)
         }
         .padding()
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(Color.platformSecondaryBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .sensoryFeedback(.success, trigger: showCopyConfirmation)
         .onChange(of: result.id) { _, _ in
@@ -189,7 +189,7 @@ struct TranslationResultRow: View {
     let audioService = AudioService()
     let aiService = AIAssistantService()
 
-    return VStack(spacing: 16) {
+    VStack(spacing: 16) {
         TranslationResultRow(
             result: TranslationResult(
                 language: Locale.Language(identifier: "es"),
@@ -227,5 +227,5 @@ struct TranslationResultRow: View {
         )
     }
     .padding()
-    .background(Color(.systemGroupedBackground))
+    .background(Color.platformGroupedBackground)
 }

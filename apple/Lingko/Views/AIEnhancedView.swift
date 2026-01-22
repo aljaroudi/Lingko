@@ -105,7 +105,7 @@ struct AIEnhancedView: View {
                     } else {
                         ForEach(Array(exampleSentences.enumerated()), id: \.offset) { index, sentence in
                             HStack(alignment: .top, spacing: 8) {
-                                Text("\(index + 1).")
+                                Text(index + 1, format: .number)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                 Text(sentence)
@@ -199,7 +199,11 @@ struct AIEnhancedView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(10)
+        #if os(iOS)
         .background(Color(.tertiarySystemGroupedBackground))
+        #elseif os(macOS)
+        .background(Color.secondary.opacity(0.1))
+        #endif
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
@@ -303,7 +307,9 @@ struct AIEnhancedView: View {
             }
             .padding()
             .navigationTitle("Ask a Question")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") {
@@ -373,7 +379,7 @@ struct AIEnhancedView: View {
                 aiService: aiService
             )
             .padding()
-            .background(Color(.secondarySystemGroupedBackground))
+            .background(Color.platformSecondaryBackground)
             .clipShape(RoundedRectangle(cornerRadius: 12))
 
             AIEnhancedView(
@@ -387,10 +393,10 @@ struct AIEnhancedView: View {
                 aiService: aiService
             )
             .padding()
-            .background(Color(.secondarySystemGroupedBackground))
+            .background(Color.platformSecondaryBackground)
             .clipShape(RoundedRectangle(cornerRadius: 12))
         }
         .padding()
     }
-    .background(Color(.systemGroupedBackground))
+    .background(Color.platformGroupedBackground)
 }

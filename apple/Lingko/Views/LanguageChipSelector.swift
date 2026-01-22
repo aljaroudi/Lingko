@@ -147,7 +147,11 @@ private struct LanguageChip: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            #if os(iOS)
             .background(isSelected ? Color.blue : Color(.systemGray5))
+            #elseif os(macOS)
+            .background(isSelected ? Color.blue : Color.secondary.opacity(0.2))
+            #endif
             .foregroundStyle(isSelected ? .white : .primary)
             .clipShape(Capsule())
         }

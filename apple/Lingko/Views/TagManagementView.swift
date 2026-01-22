@@ -29,7 +29,9 @@ struct TagManagementView: View {
                 }
             }
             .navigationTitle("Manage Tags")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") {
@@ -101,7 +103,7 @@ struct TagManagementView: View {
                 HStack {
                     Text("All Tags")
                     Spacer()
-                    Text("\(allTags.count)")
+                    Text(allTags.count, format: .number)
                         .foregroundStyle(.secondary)
                 }
             } footer: {
@@ -109,7 +111,11 @@ struct TagManagementView: View {
                     .font(.caption)
             }
         }
+        #if os(iOS)
         .listStyle(.insetGrouped)
+        #elseif os(macOS)
+        .listStyle(.inset)
+        #endif
     }
 }
 
@@ -150,7 +156,10 @@ private struct TagManagementRow: View {
                     }
 
                     if let translationCount = tag.translations?.count, translationCount > 0 {
-                        Label("\(translationCount)", systemImage: "doc.text")
+                        Label(
+                            translationCount.formatted(),
+                            systemImage: "doc.text"
+                        )
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -231,7 +240,7 @@ private struct CreateTagView: View {
                                     .background(
                                         selectedIcon == icon
                                             ? Color.blue.opacity(0.2)
-                                            : Color(.secondarySystemGroupedBackground)
+                                            : Color.platformSecondaryBackground
                                     )
                                     .foregroundStyle(selectedIcon == icon ? .blue : .primary)
                                     .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -299,7 +308,9 @@ private struct CreateTagView: View {
                 }
             }
             .navigationTitle("Create Tag")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {

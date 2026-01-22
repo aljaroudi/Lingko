@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import PhotosUI
 import SwiftData
 
 struct CameraTranslationView: View {
@@ -19,7 +18,7 @@ struct CameraTranslationView: View {
     @State private var isProcessing = false
     @State private var installedLanguages: Set<Locale.Language> = []
 
-    let initialImage: UIImage
+    let initialImage: PlatformImage
     let selectedLanguages: Set<Locale.Language>
     let autoSaveToHistory: Bool
     let historyService: HistoryService
@@ -34,6 +33,7 @@ struct CameraTranslationView: View {
             ZStack {
                 // Show image with text overlays
                 GeometryReader { geometry in
+                    #if os(iOS)
                     Image(uiImage: initialImage)
                         .resizable()
                         .scaledToFit()
@@ -54,6 +54,28 @@ struct CameraTranslationView: View {
                                 }
                             }
                         }
+                    #elseif os(macOS)
+                    Image(nsImage: initialImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .overlay {
+                            // Text overlays
+                            ForEach(capturedTexts) { text in
+                                TextOverlayView(
+                                    capturedText: text,
+                                    imageSize: initialImage.size,
+                                    containerSize: geometry.size
+                                )
+                                .onTapGesture {
+                                    selectedText = text
+                                    Task {
+                                        await translateText(text.text)
+                                    }
+                                }
+                            }
+                        }
+                    #endif
                 }
                 .ignoresSafeArea()
 
@@ -86,7 +108,9 @@ struct CameraTranslationView: View {
                 }
             }
             .navigationTitle("Image Translation")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") {
@@ -319,7 +343,7 @@ struct TranslationResultCompactRow: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.systemBackground))
+        .background(Color.platformBackground)
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
@@ -331,8 +355,14 @@ struct TranslationResultCompactRow: View {
         configurations: config
     )
 
+    #if os(iOS)
+    let previewImage = UIImage(systemName: "photo")!
+    #elseif os(macOS)
+    let previewImage = NSImage(systemSymbolName: "photo", accessibilityDescription: nil)!
+    #endif
+
     return CameraTranslationView(
-        initialImage: UIImage(systemName: "photo")!,
+        initialImage: previewImage,
         selectedLanguages: [
             Locale.Language(identifier: "es"),
             Locale.Language(identifier: "fr"),

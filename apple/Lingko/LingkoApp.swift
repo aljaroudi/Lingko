@@ -10,7 +10,11 @@ import SwiftData
 
 @main
 struct LingkoApp: App {
+    #if os(iOS)
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    #elseif os(macOS)
+    @NSApplicationDelegateAdaptor(MacAppDelegate.self) var appDelegate
+    #endif
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema(DataSchema.models)

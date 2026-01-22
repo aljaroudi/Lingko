@@ -9,7 +9,11 @@ import Foundation
 import Vision
 import CoreImage
 import OSLog
+#if os(iOS)
 import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 import NaturalLanguage
 
 @MainActor
@@ -19,13 +23,20 @@ struct VisionService {
     // MARK: - Text Recognition
 
     /// Extract text from an image using Vision OCR
-    func extractText(from image: UIImage) async throws -> [CapturedText] {
+    func extractText(from image: PlatformImage) async throws -> [CapturedText] {
         logger.info("📸 Starting text recognition from image")
 
+        #if os(iOS)
         guard let cgImage = image.cgImage else {
             logger.error("Failed to convert UIImage to CGImage")
             throw VisionError.invalidImage
         }
+        #elseif os(macOS)
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            logger.error("Failed to convert NSImage to CGImage")
+            throw VisionError.invalidImage
+        }
+        #endif
 
         return try await recognizeText(in: cgImage)
     }
@@ -69,8 +80,8 @@ struct VisionService {
 
                     // Get language hints if available
                     var detectedLanguage: String?
-                    if #available(iOS 16.0, *) {
-                        // iOS 16+ has language support in Vision
+                    if #available(iOS 16.0, macOS 13.0, *) {
+                        // iOS 16+ / macOS 13+ has language support in Vision
                         detectedLanguage = nil  // Language detection handled separately
                     }
 
@@ -91,7 +102,7 @@ struct VisionService {
             request.usesLanguageCorrection = true
 
             // Support multiple languages
-            if #available(iOS 16.0, *) {
+            if #available(iOS 16.0, macOS 13.0, *) {
                 request.recognitionLanguages = ["en-US", "es-ES", "fr-FR", "de-DE", "ja-JP", "zh-Hans", "zh-Hant", "ar", "ko", "ru"]
             }
 
@@ -112,7 +123,7 @@ struct VisionService {
     func detectLanguage(in text: String) -> String? {
         logger.debug("🔍 Detecting language for text: \(text.prefix(50))...")
 
-        if #available(iOS 16.0, *) {
+        if #available(iOS 16.0, macOS 13.0, *) {
             let recognizer = NLLanguageRecognizer()
             recognizer.processString(text)
 

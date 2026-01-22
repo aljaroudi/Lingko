@@ -73,10 +73,17 @@ extension Color {
 
     /// Convert Color to hex string
     var hexString: String? {
+        #if os(iOS)
         guard let components = UIColor(self).cgColor.components,
               components.count >= 3 else {
             return nil
         }
+        #elseif os(macOS)
+        guard let components = NSColor(self).cgColor.components,
+              components.count >= 3 else {
+            return nil
+        }
+        #endif
 
         let r = Float(components[0])
         let g = Float(components[1])
