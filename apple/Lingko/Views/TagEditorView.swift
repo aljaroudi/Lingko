@@ -44,7 +44,7 @@ struct TagEditorView: View {
                 }
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.secondarySystemGroupedBackground))
+                .background(Color.platformSecondaryBackground)
 
                 Divider()
 
@@ -72,7 +72,9 @@ struct TagEditorView: View {
                 }
             }
             .navigationTitle("Edit Tags")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -170,7 +172,7 @@ private struct TagSelectionRow: View {
             .padding(.horizontal, 12)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? chipColor.opacity(0.1) : Color(.secondarySystemGroupedBackground))
+                    .fill(isSelected ? chipColor.opacity(0.1) : Color.platformSecondaryBackground)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)

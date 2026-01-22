@@ -15,7 +15,11 @@ struct SettingsView: View {
     @AppStorage("includeLinguisticAnalysis") private var includeLinguisticAnalysis: Bool = true
     @AppStorage("includeRomanization") private var includeRomanization: Bool = true
     @AppStorage("reduceMotion") private var reduceMotion: Bool = false
+    #if os(iOS)
     @AppStorage("hapticFeedback") private var hapticFeedback: Bool = true
+    #elseif os(macOS)
+    @AppStorage("launchAtLogin") private var launchAtLogin: Bool = false
+    #endif
 
     var body: some View {
         NavigationStack {
@@ -36,7 +40,11 @@ struct SettingsView: View {
                 } header: {
                     Text("Language Management")
                 } footer: {
+                    #if os(iOS)
                     Text("Download language packs in iOS Settings to enable offline translation")
+                    #elseif os(macOS)
+                    Text("Download language packs in System Settings to enable offline translation")
+                    #endif
                 }
                 
                 // Translation Settings
@@ -83,19 +91,39 @@ struct SettingsView: View {
                     Text("Default speed for text-to-speech playback")
                 }
 
-                // Accessibility Settings
+                // Accessibility & System Settings
                 Section {
                     Toggle(isOn: $reduceMotion) {
                         Label("Reduce Motion", systemImage: "motion.reduce")
                     }
 
+                    #if os(iOS)
                     Toggle(isOn: $hapticFeedback) {
                         Label("Haptic Feedback", systemImage: "hand.tap")
                     }
+                    #elseif os(macOS)
+                    Toggle(isOn: $launchAtLogin) {
+                        Label("Launch at Login", systemImage: "power")
+                    }
+                    .onChange(of: launchAtLogin) { _, newValue in
+                        MacAppDelegate.setLaunchAtLogin(newValue)
+                    }
+                    .onAppear {
+                        launchAtLogin = MacAppDelegate.isLaunchAtLoginEnabled()
+                    }
+                    #endif
                 } header: {
+                    #if os(iOS)
                     Text("Accessibility")
+                    #elseif os(macOS)
+                    Text("Preferences")
+                    #endif
                 } footer: {
+                    #if os(iOS)
                     Text("Customize accessibility features")
+                    #elseif os(macOS)
+                    Text("Configure app behavior and accessibility features")
+                    #endif
                 }
 
                 // App Information
@@ -147,7 +175,9 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
@@ -167,9 +197,11 @@ struct SettingsView: View {
     }
     
     private func openTranslateSettings() {
-        if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
-            UIApplication.shared.open(settingsUrl)
-        }
+        #if os(iOS)
+        PlatformUtils.openSystemSettings(urlString: UIApplication.openSettingsURLString)
+        #elseif os(macOS)
+        PlatformUtils.openSystemSettings(urlString: "x-apple.systempreferences:com.apple.Translate-Settings")
+        #endif
     }
 }
 

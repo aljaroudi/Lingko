@@ -36,7 +36,7 @@ struct HistoryView: View {
                 if !allTags.isEmpty {
                     tagFilterBar
                         .padding(.vertical, 8)
-                        .background(Color(.systemGroupedBackground))
+                        .background(Color.platformGroupedBackground)
                 }
 
                 Divider()
@@ -259,7 +259,11 @@ struct HistoryView: View {
                 }
             }
         }
+        #if os(iOS)
         .listStyle(.insetGrouped)
+        #elseif os(macOS)
+        .listStyle(.inset)
+        #endif
     }
 
     @ViewBuilder
@@ -491,7 +495,11 @@ private struct TagFilterChip: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
+            #if os(iOS)
             .background(isSelected ? chipColor : Color(.systemGray5))
+            #elseif os(macOS)
+            .background(isSelected ? chipColor : Color.secondary.opacity(0.2))
+            #endif
             .foregroundStyle(isSelected ? .white : .primary)
             .clipShape(Capsule())
         }

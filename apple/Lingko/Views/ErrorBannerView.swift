@@ -132,6 +132,7 @@ struct ErrorMessage: Identifiable {
     }
 
     private static func openTranslateSettings() {
+        #if os(iOS)
         // Try to open iOS Translate settings
         if let url = URL(string: "App-prefs:TRANSLATE") {
             UIApplication.shared.open(url) { success in
@@ -143,6 +144,9 @@ struct ErrorMessage: Identifiable {
                 }
             }
         }
+        #elseif os(macOS)
+        PlatformUtils.openSystemSettings(urlString: "x-apple.systempreferences:com.apple.Translate-Settings")
+        #endif
     }
 
     static func offline() -> ErrorMessage {
@@ -237,7 +241,7 @@ extension View {
         )
         Spacer()
     }
-    .background(Color(.systemGroupedBackground))
+    .background(Color.platformGroupedBackground)
 }
 
 #Preview("Warning") {
@@ -248,7 +252,7 @@ extension View {
         )
         Spacer()
     }
-    .background(Color(.systemGroupedBackground))
+    .background(Color.platformGroupedBackground)
 }
 
 #Preview("Info") {
@@ -259,5 +263,5 @@ extension View {
         )
         Spacer()
     }
-    .background(Color(.systemGroupedBackground))
+    .background(Color.platformGroupedBackground)
 }

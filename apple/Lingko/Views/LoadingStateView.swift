@@ -40,7 +40,7 @@ struct LoadingStateView: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemGroupedBackground))
+        .background(Color.platformGroupedBackground)
     }
 
     private var inlineView: some View {
@@ -62,25 +62,41 @@ struct SkeletonCard: View {
             // Language header skeleton
             HStack {
                 RoundedRectangle(cornerRadius: 4)
+                    #if os(iOS)
                     .fill(Color(.systemGray5))
+                    #elseif os(macOS)
+                    .fill(Color.secondary.opacity(0.2))
+                    #endif
                     .frame(width: 80, height: 14)
 
                 Spacer()
 
                 RoundedRectangle(cornerRadius: 4)
+                    #if os(iOS)
                     .fill(Color(.systemGray5))
+                    #elseif os(macOS)
+                    .fill(Color.secondary.opacity(0.2))
+                    #endif
                     .frame(width: 60, height: 14)
             }
 
             // Translation text skeleton
             VStack(alignment: .leading, spacing: 4) {
                 RoundedRectangle(cornerRadius: 4)
+                    #if os(iOS)
                     .fill(Color(.systemGray5))
+                    #elseif os(macOS)
+                    .fill(Color.secondary.opacity(0.2))
+                    #endif
                     .frame(height: 16)
                     .frame(maxWidth: .infinity)
 
                 RoundedRectangle(cornerRadius: 4)
+                    #if os(iOS)
                     .fill(Color(.systemGray5))
+                    #elseif os(macOS)
+                    .fill(Color.secondary.opacity(0.2))
+                    #endif
                     .frame(height: 16)
                     .frame(maxWidth: 200)
             }
@@ -89,14 +105,18 @@ struct SkeletonCard: View {
             HStack(spacing: 8) {
                 ForEach(0..<3, id: \.self) { _ in
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(.systemGray5))
+                        #if os(iOS)
+                    .fill(Color(.systemGray5))
+                    #elseif os(macOS)
+                    .fill(Color.secondary.opacity(0.2))
+                    #endif
                         .frame(width: 32, height: 32)
                 }
                 Spacer()
             }
         }
         .padding()
-        .background(Color(.systemBackground))
+        .background(Color.platformBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
         .overlay(
@@ -130,7 +150,7 @@ enum LoadingStyle {
 
 #Preview("Skeleton") {
     LoadingStateView(style: .skeleton, count: 3)
-        .background(Color(.systemGroupedBackground))
+        .background(Color.platformGroupedBackground)
 }
 
 #Preview("Spinner") {
@@ -139,5 +159,5 @@ enum LoadingStyle {
 
 #Preview("Inline") {
     LoadingStateView(style: .inline)
-        .background(Color(.systemGroupedBackground))
+        .background(Color.platformGroupedBackground)
 }

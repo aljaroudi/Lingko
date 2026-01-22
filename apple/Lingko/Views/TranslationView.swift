@@ -7,7 +7,11 @@
 
 import SwiftUI
 import SwiftData
+#if os(iOS)
 import PhotosUI
+#elseif os(macOS)
+import UniformTypeIdentifiers
+#endif
 import Translation
 
 struct TranslationView: View {
@@ -25,8 +29,12 @@ struct TranslationView: View {
     @State private var loadingLanguages: Set<Locale.Language> = []
     @State private var showImageTranslation = false
     @State private var showSettings = false
+    #if os(iOS)
     @State private var selectedPhotoItem: PhotosPickerItem?
-    @State private var selectedImage: UIImage?
+    #elseif os(macOS)
+    @State private var showImagePicker = false
+    #endif
+    @State private var selectedImage: PlatformImage?
 
     // Computed property - auto-use all installed languages
     private var selectedLanguages: Set<Locale.Language> {
@@ -42,7 +50,9 @@ struct TranslationView: View {
                 if !newValue {
                     // Clear image when sheet is dismissed
                     selectedImage = nil
+                    #if os(iOS)
                     selectedPhotoItem = nil
+                    #endif
                 }
             }
         )
@@ -74,9 +84,12 @@ struct TranslationView: View {
         NavigationStack {
             mainContent
                 .navigationTitle("Lingko")
+                #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
+                #endif
                 .errorBanner($errorMessage, onRetry: retryLastTranslation)
                 .toolbar {
+                    #if os(iOS)
                     ToolbarItem(placement: .navigationBarLeading) {
                         Button {
                             showSettings = true
@@ -103,6 +116,25 @@ struct TranslationView: View {
                             Image(systemName: "keyboard.chevron.compact.down")
                         }
                     }
+                    #elseif os(macOS)
+                    ToolbarItem(placement: .automatic) {
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Image(systemName: "gear")
+                        }
+                        .accessibilityLabel("Settings")
+                        .accessibilityHint("Open app settings")
+                    }
+
+                    ToolbarItemGroup(placement: .automatic) {
+                        Button {
+                            showImagePicker = true
+                        } label: {
+                            Label("Import Image", systemImage: "photo")
+                        }
+                    }
+                    #endif
                 }
                 .sheet(isPresented: $showSettings) {
                     SettingsView()
@@ -137,6 +169,24 @@ struct TranslationView: View {
                         EmptyView()
                     }
                 }
+                #if os(macOS)
+                .fileImporter(
+                    isPresented: $showImagePicker,
+                    allowedContentTypes: [.image],
+                    allowsMultipleSelection: false
+                ) { result in
+                    Task {
+                        await handleFileImport(result)
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .importImage)) { _ in
+                    showImagePicker = true
+                }
+                .onDrop(of: [.plainText, .image], isTargeted: nil) { providers in
+                    handleDrop(providers: providers)
+                    return true
+                }
+                #endif
                 .onChange(of: selectedSourceLanguage) { _, newLanguage in
                     // Update current source language when manually selected
                     if let newLanguage = newLanguage {
@@ -155,6 +205,7 @@ struct TranslationView: View {
                         handleTextChange(inputText)
                     }
                 }
+                #if os(iOS)
                 .onChange(of: selectedPhotoItem) { oldItem, newItem in
                     // Clear state when picker is dismissed without selection
                     if newItem == nil {
@@ -162,15 +213,16 @@ struct TranslationView: View {
                         showImageTranslation = false
                         return
                     }
-                    
+
                     // Only process if we have a new item
                     guard let newItem = newItem else { return }
-                    
+
                     // Load the image
                     Task {
                         await loadImage(from: newItem)
                     }
                 }
+                #endif
                 .onDisappear {
                     audioService.stop()
                 }
@@ -185,8 +237,10 @@ struct TranslationView: View {
                         }).first
                     }
                 }
+                #if os(iOS)
                 .sensoryFeedback(.impact(weight: .light), trigger: translations.count)
                 .sensoryFeedback(.error, trigger: errorTrigger)
+                #endif
         }
     }
     
@@ -235,7 +289,7 @@ struct TranslationView: View {
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $inputText)
                     .frame(minHeight: 100, maxHeight: 200)
-                    .background(Color(.systemBackground))
+                    .background(Color.platformBackground)
                     .focused($isInputFocused)
                     .onChange(of: inputText) { _, newValue in
                         handleTextChange(newValue)
@@ -243,7 +297,7 @@ struct TranslationView: View {
 
                 if inputText.isEmpty {
                     Text("Enter text")
-                        .foregroundStyle(Color(.placeholderText))
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 8)
                         .allowsHitTesting(false)
@@ -303,7 +357,7 @@ struct TranslationView: View {
             .padding(.horizontal)
             .padding(.vertical, 12)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Color.platformGroupedBackground)
     }
 
     // MARK: - Results Section
@@ -342,7 +396,7 @@ struct TranslationView: View {
                 .padding()
             }
             .scrollDismissesKeyboard(.interactively)
-            .background(Color(.systemGroupedBackground))
+            .background(Color.platformGroupedBackground)
         }
     }
 
@@ -521,12 +575,13 @@ struct TranslationView: View {
         }
     }
 
+    #if os(iOS)
     private func loadImage(from item: PhotosPickerItem?) async {
         guard let item = item else { return }
 
         do {
             if let data = try await item.loadTransferable(type: Data.self),
-               let image = UIImage(data: data) {
+               let image = PlatformImage(data: data) {
                 // Set image first
                 await MainActor.run {
                     selectedImage = image
@@ -555,7 +610,76 @@ struct TranslationView: View {
             }
         }
     }
-    
+    #endif
+
+    #if os(macOS)
+    private func handleFileImport(_ result: Result<[URL], Error>) async {
+        do {
+            let urls = try result.get()
+            guard let url = urls.first else { return }
+
+            let data = try Data(contentsOf: url)
+            guard let image = PlatformImage(data: data) else {
+                await MainActor.run {
+                    selectedImage = nil
+                    showImageTranslation = false
+                }
+                return
+            }
+
+            await MainActor.run {
+                selectedImage = image
+            }
+
+            try? await Task.sleep(nanoseconds: 10_000_000)
+            await MainActor.run {
+                if selectedImage != nil {
+                    showImageTranslation = true
+                }
+            }
+        } catch {
+            print("Failed to load image: \(error)")
+            await MainActor.run {
+                selectedImage = nil
+                showImageTranslation = false
+            }
+        }
+    }
+
+    private func handleDrop(providers: [NSItemProvider]) {
+        // Handle text drop
+        if let textProvider = providers.first(where: { $0.hasItemConformingToTypeIdentifier("public.plain-text") }) {
+            textProvider.loadItem(forTypeIdentifier: "public.plain-text", options: nil) { item, error in
+                if let data = item as? Data, let text = String(data: data, encoding: .utf8) {
+                    Task { @MainActor in
+                        inputText = text
+                    }
+                } else if let text = item as? String {
+                    Task { @MainActor in
+                        inputText = text
+                    }
+                }
+            }
+            return
+        }
+
+        // Handle image drop
+        if let imageProvider = providers.first(where: { $0.canLoadObject(ofClass: PlatformImage.self) }) {
+            imageProvider.loadObject(ofClass: PlatformImage.self) { item, error in
+                if let image = item as? PlatformImage {
+                    Task { @MainActor in
+                        selectedImage = image
+                        try? await Task.sleep(nanoseconds: 10_000_000)
+                        if selectedImage != nil {
+                            showImageTranslation = true
+                        }
+                    }
+                }
+            }
+        }
+    }
+    #endif
+
     private func loadInstalledLanguages() async {
         var installed: Set<Locale.Language> = []
 
@@ -777,7 +901,9 @@ struct SourceLanguagePickerView: View {
             }
             .searchable(text: $searchText, prompt: "Search languages")
             .navigationTitle("Source Language")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -789,6 +915,7 @@ struct SourceLanguagePickerView: View {
     }
     
     private func openTranslateSettings() {
+        #if os(iOS)
         // Try to open iOS Translate settings
         if let url = URL(string: "App-prefs:TRANSLATE") {
             UIApplication.shared.open(url) { success in
@@ -800,6 +927,9 @@ struct SourceLanguagePickerView: View {
                 }
             }
         }
+        #elseif os(macOS)
+        PlatformUtils.openSystemSettings(urlString: "x-apple.systempreferences:com.apple.Translate-Settings")
+        #endif
     }
 }
 

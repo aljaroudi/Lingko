@@ -23,6 +23,7 @@ final class AudioService {
     // MARK: - Audio Session Configuration
 
     private func configureAudioSession() {
+        #if os(iOS)
         do {
             let audioSession = AVAudioSession.sharedInstance()
             try audioSession.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
@@ -31,6 +32,8 @@ final class AudioService {
         } catch {
             logger.error("❌ Failed to configure audio session: \(error.localizedDescription)")
         }
+        #endif
+        // On macOS: No audio session needed, AVSpeechSynthesizer works directly
     }
 
     // MARK: - Speech Control
@@ -87,25 +90,31 @@ final class AudioService {
 
     /// Stop the current speech immediately
     func stop() {
-        if synthesizer.isSpeaking {
-            logger.info("🔇 Stopping speech")
-            synthesizer.stopSpeaking(at: .immediate)
+        DispatchQueue.main.async {
+            if self.synthesizer.isSpeaking {
+                self.logger.info("🔇 Stopping speech")
+                self.synthesizer.stopSpeaking(at: .immediate)
+            }
         }
     }
 
     /// Pause the current speech
     func pause() {
-        if synthesizer.isSpeaking && !synthesizer.isPaused {
-            logger.info("⏸️  Pausing speech")
-            synthesizer.pauseSpeaking(at: .word)
+        DispatchQueue.main.async {
+            if self.synthesizer.isSpeaking && !self.synthesizer.isPaused {
+                self.logger.info("⏸️  Pausing speech")
+                self.synthesizer.pauseSpeaking(at: .word)
+            }
         }
     }
 
     /// Resume paused speech
     func resume() {
-        if synthesizer.isPaused {
-            logger.info("▶️  Resuming speech")
-            synthesizer.continueSpeaking()
+        DispatchQueue.main.async {
+            if self.synthesizer.isPaused {
+                self.logger.info("▶️  Resuming speech")
+                self.synthesizer.continueSpeaking()
+            }
         }
     }
 

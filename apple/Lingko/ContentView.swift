@@ -49,7 +49,27 @@ struct ContentView: View {
                 .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PasteAndTranslate"))) { _ in
                     handlePasteAndTranslate()
                 }
+                #if os(macOS)
+                .onReceive(NotificationCenter.default.publisher(for: .pasteAndTranslate)) { _ in
+                    handlePasteAndTranslate()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .translateText)) { notification in
+                    if let text = notification.object as? String {
+                        loadedHistoryText = text
+                        selectedTab = 0
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: Notification.Name("showHistory"))) { _ in
+                    selectedTab = 1
+                }
+                .onReceive(NotificationCenter.default.publisher(for: Notification.Name("showSettings"))) { _ in
+                    // Settings is handled within TranslationView
+                    selectedTab = 0
+                }
+                #endif
+                #if os(iOS)
                 .sensoryFeedback(.impact(weight: .medium), trigger: pasteTrigger)
+                #endif
             }
         }
         .task {
@@ -58,17 +78,21 @@ struct ContentView: View {
     }
 
     private func checkForPasteAction() {
+        #if os(iOS)
         if AppDelegate.shouldPasteAndTranslate {
             AppDelegate.shouldPasteAndTranslate = false
             handlePasteAndTranslate()
         }
+        #endif
     }
 
     private func handlePasteAndTranslate() {
-        if let clipboardText = UIPasteboard.general.string, !clipboardText.isEmpty {
+        if let clipboardText = PlatformUtils.readFromPasteboard(), !clipboardText.isEmpty {
             loadedHistoryText = clipboardText
             selectedTab = 0
+            #if os(iOS)
             pasteTrigger = UUID()
+            #endif
         }
     }
 
@@ -102,6 +126,7 @@ struct ContentView: View {
     }
 
     private func openTranslateSettings() {
+        #if os(iOS)
         if let url = URL(string: "App-prefs:TRANSLATE") {
             UIApplication.shared.open(url) { success in
                 if !success {
@@ -111,6 +136,9 @@ struct ContentView: View {
                 }
             }
         }
+        #elseif os(macOS)
+        PlatformUtils.openSystemSettings(urlString: "x-apple.systempreferences:com.apple.Translate-Settings")
+        #endif
     }
 }
 
