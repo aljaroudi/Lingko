@@ -149,14 +149,6 @@ struct ErrorMessage: Identifiable {
         #endif
     }
 
-    static func offline() -> ErrorMessage {
-        ErrorMessage(
-            title: "No internet connection",
-            message: "Some features may not be available",
-            severity: .warning
-        )
-    }
-
     static func languagePackNeeded(language: String) -> ErrorMessage {
         ErrorMessage(
             title: "Language pack required",
@@ -237,17 +229,6 @@ extension View {
                 severity: .error
             ),
             onRetry: {},
-            onDismiss: {}
-        )
-        Spacer()
-    }
-    .background(Color.platformGroupedBackground)
-}
-
-#Preview("Warning") {
-    VStack {
-        ErrorBannerView(
-            error: ErrorMessage.offline(),
             onDismiss: {}
         )
         Spacer()
