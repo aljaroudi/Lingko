@@ -54,15 +54,15 @@ struct EmptyStateConfiguration: Identifiable {
     let id = UUID()
     let iconName: String
     let iconColor: Color
-    let title: String
-    let message: String
+    let title: LocalizedStringKey
+    let message: LocalizedStringKey
     let action: EmptyStateAction?
 
     init(
         iconName: String,
         iconColor: Color = .blue,
-        title: String,
-        message: String,
+        title: LocalizedStringKey,
+        message: LocalizedStringKey,
         action: EmptyStateAction? = nil
     ) {
         self.iconName = iconName
@@ -96,20 +96,6 @@ struct EmptyStateConfiguration: Identifiable {
         )
     }
 
-    static func noLanguagesSelected(action: @escaping () -> Void) -> EmptyStateConfiguration {
-        EmptyStateConfiguration(
-            iconName: "globe",
-            iconColor: .blue,
-            title: "No languages selected",
-            message: "Select target languages to start translating",
-            action: EmptyStateAction(
-                title: "Select Languages",
-                iconName: "globe",
-                handler: action
-            )
-        )
-    }
-
     static func insufficientLanguages(installedCount: Int, action: @escaping () -> Void) -> EmptyStateConfiguration {
         EmptyStateConfiguration(
             iconName: "arrow.down.circle",
@@ -125,20 +111,6 @@ struct EmptyStateConfiguration: Identifiable {
             )
         )
     }
-
-    static let cameraEmpty = EmptyStateConfiguration(
-        iconName: "camera",
-        iconColor: .purple,
-        title: "No text detected",
-        message: "Point your camera at text or select an image to translate"
-    )
-
-    static let offlineEmpty = EmptyStateConfiguration(
-        iconName: "wifi.slash",
-        iconColor: .orange,
-        title: "No internet connection",
-        message: "Connect to download language packs for offline translation"
-    )
 }
 
 struct EmptyStateAction {
@@ -157,16 +129,4 @@ struct EmptyStateAction {
 
 #Preview("Search Empty") {
     EmptyStateView(configuration: .searchEmpty(query: "hello"))
-}
-
-#Preview("No Languages") {
-    EmptyStateView(configuration: .noLanguagesSelected(action: {}))
-}
-
-#Preview("Camera Empty") {
-    EmptyStateView(configuration: .cameraEmpty)
-}
-
-#Preview("Offline") {
-    EmptyStateView(configuration: .offlineEmpty)
 }

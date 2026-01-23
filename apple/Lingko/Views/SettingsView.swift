@@ -116,14 +116,10 @@ struct SettingsView: View {
                     #if os(iOS)
                     Text("Accessibility")
                     #elseif os(macOS)
-                    Text("Preferences")
+                    Text("Settings")
                     #endif
                 } footer: {
-                    #if os(iOS)
                     Text("Customize accessibility features")
-                    #elseif os(macOS)
-                    Text("Configure app behavior and accessibility features")
-                    #endif
                 }
 
                 // App Information
@@ -132,13 +128,6 @@ struct SettingsView: View {
                         Text("Version")
                         Spacer()
                         Text(appVersion)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack {
-                        Text("Build")
-                        Spacer()
-                        Text(buildNumber)
                             .foregroundStyle(.secondary)
                     }
 
