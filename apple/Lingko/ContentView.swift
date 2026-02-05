@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var pasteTrigger = UUID()
     @State private var installedLanguages: Set<Locale.Language> = []
     @State private var isLoadingLanguages = true
+    @State private var showDownloadSheet = false
 
     var body: some View {
         Group {
@@ -23,7 +24,7 @@ struct ContentView: View {
             } else if installedLanguages.count < 2 {
                 EmptyStateView(
                     configuration: .insufficientLanguages(installedCount: installedLanguages.count) {
-                        openTranslateSettings()
+                        showDownloadSheet = true
                     }
                 )
             } else {
@@ -75,6 +76,9 @@ struct ContentView: View {
         .task {
             await loadInstalledLanguages()
         }
+        .sheet(isPresented: $showDownloadSheet, onDismiss: { Task { await loadInstalledLanguages() } }) {
+            LanguageDownloadView()
+        }
     }
 
     private func checkForPasteAction() {
@@ -125,21 +129,6 @@ struct ContentView: View {
         isLoadingLanguages = false
     }
 
-    private func openTranslateSettings() {
-        #if os(iOS)
-        if let url = URL(string: "App-prefs:TRANSLATE") {
-            UIApplication.shared.open(url) { success in
-                if !success {
-                    if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(settingsUrl)
-                    }
-                }
-            }
-        }
-        #elseif os(macOS)
-        PlatformUtils.openSystemSettings(urlString: "x-apple.systempreferences:com.apple.Translate-Settings")
-        #endif
-    }
 }
 
 #Preview {
