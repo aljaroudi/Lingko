@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -20,6 +19,7 @@ struct SettingsView: View {
     #elseif os(macOS)
     @AppStorage("launchAtLogin") private var launchAtLogin: Bool = false
     #endif
+    @State private var showDownloadSheet = false
 
     var body: some View {
         NavigationStack {
@@ -27,7 +27,7 @@ struct SettingsView: View {
                 // Language Management
                 Section {
                     Button {
-                        openTranslateSettings()
+                        showDownloadSheet = true
                     } label: {
                         HStack {
                             Label("Download Languages", systemImage: "arrow.down.circle")
@@ -39,12 +39,6 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("Language Management")
-                } footer: {
-                    #if os(iOS)
-                    Text("Download language packs in iOS Settings to enable offline translation")
-                    #elseif os(macOS)
-                    Text("Download language packs in System Settings to enable offline translation")
-                    #endif
                 }
                 
                 // Translation Settings
@@ -175,6 +169,9 @@ struct SettingsView: View {
                 }
             }
         }
+        .sheet(isPresented: $showDownloadSheet) {
+            LanguageDownloadView()
+        }
     }
 
     private var appVersion: String {
@@ -184,14 +181,7 @@ struct SettingsView: View {
     private var buildNumber: String {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
     }
-    
-    private func openTranslateSettings() {
-        #if os(iOS)
-        PlatformUtils.openSystemSettings(urlString: UIApplication.openSettingsURLString)
-        #elseif os(macOS)
-        PlatformUtils.openSystemSettings(urlString: "x-apple.systempreferences:com.apple.Translate-Settings")
-        #endif
-    }
+
 }
 
 #Preview {

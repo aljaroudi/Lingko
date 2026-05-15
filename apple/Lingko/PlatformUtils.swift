@@ -30,15 +30,4 @@ struct PlatformUtils {
         #endif
     }
 
-    static func openSystemSettings(urlString: String) {
-        #if os(iOS)
-        if let url = URL(string: urlString) {
-            UIApplication.shared.open(url)
-        }
-        #elseif os(macOS)
-        if let url = URL(string: urlString) {
-            NSWorkspace.shared.open(url)
-        }
-        #endif
-    }
 }

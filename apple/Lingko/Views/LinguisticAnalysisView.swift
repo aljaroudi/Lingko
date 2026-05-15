@@ -111,7 +111,7 @@ struct TokenChip: View {
                         .foregroundStyle(.secondary)
                         .italic()
                 } else {
-                    Text(" ")
+                    Text("")
                         .font(.caption2)
                         .opacity(0)
                 }

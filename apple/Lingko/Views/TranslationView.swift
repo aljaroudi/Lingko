@@ -66,6 +66,7 @@ struct TranslationView: View {
     @State private var sourceRomanization: String?
     @State private var errorMessage: ErrorMessage?
     @State private var errorTrigger = UUID()
+    @State private var showDownloadSheet = false
     @FocusState private var isInputFocused: Bool
     @AppStorage("defaultSpeechRate") private var speechRate: Double = 0.5
 
@@ -135,7 +136,7 @@ struct TranslationView: View {
                     }
                     #endif
                 }
-                .sheet(isPresented: $showSettings) {
+                .sheet(isPresented: $showSettings, onDismiss: { Task { await loadInstalledLanguages() } }) {
                     SettingsView()
                 }
                 .sheet(isPresented: showImageTranslationBinding) {
@@ -227,6 +228,12 @@ struct TranslationView: View {
                 .sensoryFeedback(.impact(weight: .light), trigger: translations.count)
                 .sensoryFeedback(.error, trigger: errorTrigger)
                 #endif
+        }
+        .sheet(
+            isPresented: $showDownloadSheet,
+            onDismiss: { Task { await loadInstalledLanguages() } }
+        ) {
+            LanguageDownloadView()
         }
     }
     
@@ -549,7 +556,18 @@ struct TranslationView: View {
         } catch {
             isTranslating = false
             loadingLanguages = []
-            errorMessage = ErrorMessage.from(error)
+            if let translationError = error as? TranslationError,
+               case .missingLanguagePacks = translationError {
+                errorMessage = ErrorMessage(
+                    title: translationError.errorDescription ?? "Language packs missing",
+                    message: translationError.recoverySuggestion,
+                    severity: .warning,
+                    actionTitle: "Download",
+                    action: { showDownloadSheet = true }
+                )
+            } else {
+                errorMessage = ErrorMessage.from(error)
+            }
             errorTrigger = UUID()
         }
     }

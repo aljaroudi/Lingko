@@ -132,7 +132,7 @@ struct SupportedLanguages {
 }
 
 /// Information about a supported language
-struct LanguageInfo: Identifiable {
+struct LanguageInfo: Identifiable, Equatable {
     let code: String
     let name: String
 

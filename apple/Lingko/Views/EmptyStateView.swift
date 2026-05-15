@@ -105,8 +105,8 @@ struct EmptyStateConfiguration: Identifiable {
                 ? "Download at least 2 languages to start translating"
                 : "You have \(installedCount) language. Download at least one more to start translating",
             action: EmptyStateAction(
-                title: "Open iOS Settings",
-                iconName: "gear",
+                title: "Download Languages",
+                iconName: "arrow.down.circle",
                 handler: action
             )
         )
