@@ -38,38 +38,32 @@ class TranslationViewModel @Inject constructor(
     private var translationJob: Job? = null
 
     init {
-        // Initialize Text-to-Speech
         viewModelScope.launch {
             try {
                 audioRepository.initialize()
             } catch (e: Exception) {
-                // TTS initialization failed, but app should continue to work
-                // User just won't be able to use speech feature
+                // TTS init failed — app continues without speech
             }
         }
 
-        // Collect speaking state from AudioRepository
         viewModelScope.launch {
             audioRepository.isSpeaking.collect { isSpeaking ->
                 _uiState.update { it.copy(isSpeaking = isSpeaking) }
             }
         }
 
-        // Load preferences
         viewModelScope.launch {
             preferencesRepository.selectedLanguages.collect { languages ->
                 _uiState.update { currentState ->
-                    val newActivePriority = if (currentState.activePriorityLanguage == null ||
-                                                !languages.contains(currentState.activePriorityLanguage)) {
-                        // Set to first language alphabetically if current is not valid
-                        languages.sortedBy { it.displayName }.firstOrNull()
-                    } else {
-                        currentState.activePriorityLanguage
+                    val newTarget = when {
+                        currentState.selectedTargetLanguage != null &&
+                            languages.contains(currentState.selectedTargetLanguage) ->
+                            currentState.selectedTargetLanguage
+                        else -> languages.sortedBy { it.displayName }.firstOrNull()
                     }
-
                     currentState.copy(
                         selectedTargetLanguages = languages,
-                        activePriorityLanguage = newActivePriority,
+                        selectedTargetLanguage = newTarget,
                         showRomanization = true
                     )
                 }
@@ -79,22 +73,11 @@ class TranslationViewModel @Inject constructor(
 
     fun onTextChange(text: String) {
         _uiState.update { it.copy(inputText = text) }
-
-        // Cancel previous translation job
         translationJob?.cancel()
-
         if (text.isBlank()) {
-            _uiState.update {
-                it.copy(
-                    translations = emptyList(),
-                    sourceLanguage = null,
-                    error = null
-                )
-            }
+            _uiState.update { it.copy(translation = null, sourceLanguage = null, error = null) }
             return
         }
-
-        // Debounce translation by 500ms
         translationJob = viewModelScope.launch {
             delay(500)
             translateText(text)
@@ -102,40 +85,26 @@ class TranslationViewModel @Inject constructor(
     }
 
     fun setText(text: String) {
-        // Set text and trigger translation immediately (no debounce for extracted text)
         _uiState.update { it.copy(inputText = text) }
-        
         translationJob?.cancel()
-        
         if (text.isNotBlank()) {
-            translationJob = viewModelScope.launch {
-                translateText(text)
-            }
+            translationJob = viewModelScope.launch { translateText(text) }
         }
     }
 
     private suspend fun translateText(text: String) {
         _uiState.update { it.copy(isTranslating = true, error = null) }
 
-        // Detect language with priority for user-selected languages
         val detectedResult = translationRepository.detectLanguage(
             text = text,
             preferredLanguages = _uiState.value.selectedTargetLanguages
         )
         val sourceLanguage = detectedResult.getOrNull()
-
-        // This should always succeed now with fallback, but keep null check for safety
         if (sourceLanguage == null) {
-            _uiState.update {
-                it.copy(
-                    isTranslating = false,
-                    error = "Could not detect language"
-                )
-            }
+            _uiState.update { it.copy(isTranslating = false, error = "Could not detect language") }
             return
         }
 
-        // Get possible languages for user reference
         val possibleLanguages = translationRepository.detectPossibleLanguages(
             text = text,
             preferredLanguages = _uiState.value.selectedTargetLanguages,
@@ -143,81 +112,58 @@ class TranslationViewModel @Inject constructor(
         )
 
         _uiState.update { currentState ->
-            // If active priority language is same as new source, switch to another
-            val newActivePriority = if (currentState.activePriorityLanguage == sourceLanguage.language) {
+            val newTarget = if (currentState.selectedTargetLanguage == sourceLanguage.language) {
                 currentState.selectedTargetLanguages
                     .filter { it != sourceLanguage.language }
                     .sortedBy { it.displayName }
                     .firstOrNull()
             } else {
-                currentState.activePriorityLanguage
+                currentState.selectedTargetLanguage
             }
-
             currentState.copy(
                 sourceLanguage = sourceLanguage,
                 possibleSourceLanguages = possibleLanguages,
-                activePriorityLanguage = newActivePriority
+                selectedTargetLanguage = newTarget
             )
         }
 
-        // Use effective source language (manual override or detected)
         val effectiveSource = _uiState.value.effectiveSourceLanguage ?: sourceLanguage.language
+        val targetLanguage = _uiState.value.selectedTargetLanguage
 
-        // Filter out source language from target languages (don't translate to same language)
-        val targetLanguages = _uiState.value.selectedTargetLanguages.filter { it != effectiveSource }.toSet()
-
-        // If no target languages remain after filtering, show empty results
-        if (targetLanguages.isEmpty()) {
-            _uiState.update {
-                it.copy(
-                    translations = emptyList(),
-                    isTranslating = false
-                )
-            }
+        if (targetLanguage == null || targetLanguage == effectiveSource) {
+            _uiState.update { it.copy(translation = null, isTranslating = false) }
             return
         }
 
-        // Translate to all selected languages (excluding source)
-        // Prioritize the active language if set
-        val results = mutableListOf<TranslationResult>()
         translationRepository.translateToMultiple(
             text = text,
             from = effectiveSource,
-            toLanguages = targetLanguages,
-            priorityLanguage = _uiState.value.activePriorityLanguage
+            toLanguages = setOf(targetLanguage),
+            priorityLanguage = targetLanguage
         ).collect { result ->
-            // Add romanization if needed
             val withRomanization = if (result.language.script.needsRomanization) {
                 result.copy(
-                    romanization = romanizationRepository.romanize(
-                        result.translation,
-                        result.language
-                    )
+                    romanization = romanizationRepository.romanize(result.translation, result.language)
                 )
             } else result
 
-            results.add(withRomanization)
-            _uiState.update {
-                it.copy(translations = results.sortedBy { r -> r.language.displayName })
-            }
+            _uiState.update { it.copy(translation = withRomanization) }
         }
 
-        // Save all translations to history with same groupId
-        if (results.isNotEmpty()) {
+        val finalResult = _uiState.value.translation
+        if (finalResult != null) {
             val groupId = java.util.UUID.randomUUID().toString()
-            historyRepository.saveTranslations(results, text, groupId)
+            historyRepository.saveTranslations(listOf(finalResult), text, groupId)
         }
 
         _uiState.update { it.copy(isTranslating = false) }
     }
 
     fun retryTranslation() {
-        val currentText = _uiState.value.inputText
-        if (currentText.isNotBlank()) {
+        val text = _uiState.value.inputText
+        if (text.isNotBlank()) {
             translationJob?.cancel()
-            translationJob = viewModelScope.launch {
-                translateText(currentText)
-            }
+            translationJob = viewModelScope.launch { translateText(text) }
         }
     }
 
@@ -227,85 +173,76 @@ class TranslationViewModel @Inject constructor(
 
     fun toggleLanguage(language: Language) {
         viewModelScope.launch {
-            val currentLanguages = _uiState.value.selectedTargetLanguages
-            val newLanguages = if (currentLanguages.contains(language)) {
-                currentLanguages - language
-            } else {
-                currentLanguages + language
+            val newLanguages = _uiState.value.selectedTargetLanguages.let {
+                if (it.contains(language)) it - language else it + language
             }
-
-            // Save to preferences
             preferencesRepository.setSelectedLanguages(newLanguages)
-
-            // Re-translate if there's input text
             if (_uiState.value.inputText.isNotBlank()) {
                 translationJob?.cancel()
-                translationJob = viewModelScope.launch {
-                    delay(500)
-                    translateText(_uiState.value.inputText)
-                }
+                translationJob = viewModelScope.launch { delay(500); translateText(_uiState.value.inputText) }
             }
         }
     }
 
-    fun copyToClipboard(result: TranslationResult) {
+    fun copyToClipboard(text: String) {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val clip = ClipData.newPlainText("Translation", result.translation)
-        clipboard.setPrimaryClip(clip)
+        clipboard.setPrimaryClip(ClipData.newPlainText("Translation", text))
     }
 
     fun speak(result: TranslationResult) {
-        audioRepository.speak(
-            text = result.translation,
-            language = result.language,
-            rate = 1.0f
-        )
+        audioRepository.speak(text = result.translation, language = result.language, rate = 1.0f)
     }
 
     fun setManualSourceLanguage(language: Language) {
         _uiState.update { currentState ->
-            // If active priority language is same as new source, switch to another
-            val newActivePriority = if (currentState.activePriorityLanguage == language) {
+            val newTarget = if (currentState.selectedTargetLanguage == language) {
                 currentState.selectedTargetLanguages
                     .filter { it != language }
                     .sortedBy { it.displayName }
                     .firstOrNull()
-            } else {
-                currentState.activePriorityLanguage
-            }
-
-            currentState.copy(
-                manualSourceLanguage = language,
-                activePriorityLanguage = newActivePriority
-            )
+            } else currentState.selectedTargetLanguage
+            currentState.copy(manualSourceLanguage = language, selectedTargetLanguage = newTarget)
         }
-
-        // Re-translate with the new source language
         if (_uiState.value.inputText.isNotBlank()) {
             translationJob?.cancel()
-            translationJob = viewModelScope.launch {
-                translateText(_uiState.value.inputText)
-            }
+            translationJob = viewModelScope.launch { translateText(_uiState.value.inputText) }
         }
     }
 
     fun clearManualSourceLanguage() {
         _uiState.update { it.copy(manualSourceLanguage = null) }
-
-        // Re-translate with auto-detected language
         if (_uiState.value.inputText.isNotBlank()) {
             translationJob?.cancel()
-            translationJob = viewModelScope.launch {
-                translateText(_uiState.value.inputText)
-            }
+            translationJob = viewModelScope.launch { translateText(_uiState.value.inputText) }
         }
     }
 
-    fun setActivePriorityLanguage(language: Language) {
-        _uiState.update { it.copy(activePriorityLanguage = language) }
+    fun onTargetLanguageSelected(language: Language) {
+        _uiState.update { it.copy(selectedTargetLanguage = language, translation = null) }
+        if (_uiState.value.inputText.isNotBlank()) {
+            translationJob?.cancel()
+            translationJob = viewModelScope.launch { translateText(_uiState.value.inputText) }
+        }
+    }
 
-        // If we already have a translation for this language, no need to re-translate
-        // The UI will automatically show it via the activeTranslation computed property
+    fun swap() {
+        val state = _uiState.value
+        val newSource = state.selectedTargetLanguage
+        val newTarget = state.effectiveSourceLanguage
+        val newInput = state.translation?.translation ?: state.inputText
+        _uiState.update {
+            it.copy(
+                manualSourceLanguage = newSource,
+                selectedTargetLanguage = newTarget,
+                inputText = newInput,
+                translation = null,
+                sourceLanguage = null
+            )
+        }
+        if (newInput.isNotBlank()) {
+            translationJob?.cancel()
+            translationJob = viewModelScope.launch { translateText(newInput) }
+        }
     }
 
     override fun onCleared() {

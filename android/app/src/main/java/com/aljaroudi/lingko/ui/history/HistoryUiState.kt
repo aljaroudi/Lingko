@@ -7,5 +7,6 @@ data class HistoryUiState(
     val translationGroups: List<TranslationGroup> = emptyList(),
     val searchQuery: String = "",
     val isLoading: Boolean = false,
-    val availableTags: List<Tag> = emptyList()
+    val availableTags: List<Tag> = emptyList(),
+    val speakingItemId: String? = null
 )

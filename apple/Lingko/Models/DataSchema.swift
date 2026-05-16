@@ -13,6 +13,7 @@ typealias SavedTranslation = DataSchema.SavedTranslation
 typealias Tag = DataSchema.Tag
 typealias GlossaryTerm = DataSchema.GlossaryTerm
 typealias ConversationSession = DataSchema.ConversationSession
+typealias TranslationEntry = DataSchema.TranslationEntry
 
 // MARK: - V1 Schema (Current)
 

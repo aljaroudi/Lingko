@@ -3,14 +3,18 @@ package com.aljaroudi.lingko.ui.image.components
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.aljaroudi.lingko.R
 import com.aljaroudi.lingko.domain.model.TextBlock
 import com.aljaroudi.lingko.domain.model.TranslationResult
-import com.aljaroudi.lingko.ui.translation.components.TranslationResultCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,18 +73,52 @@ fun TranslationBottomSheet(
             } else if (translations.isNotEmpty()) {
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(vertical = 8.dp)
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     items(
                         items = translations,
                         key = { it.id }
                     ) { result ->
-                        TranslationResultCard(
-                            result = result,
-                            showRomanization = showRomanization,
-                            onSpeak = { onSpeak(result) },
-                            onCopy = { onCopy(result) }
-                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = result.language.displayName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                            Text(
+                                text = result.translation,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                            if (showRomanization && result.romanization != null) {
+                                Text(
+                                    text = result.romanization,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Row {
+                                IconButton(onClick = { onSpeak(result) }) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                        contentDescription = stringResource(R.string.cd_speak_translation),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                IconButton(onClick = { onCopy(result) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.ContentCopy,
+                                        contentDescription = stringResource(R.string.cd_copy_translation),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            HorizontalDivider()
+                        }
                     }
                 }
             } else {

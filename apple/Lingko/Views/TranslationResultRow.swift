@@ -9,119 +9,151 @@ import SwiftUI
 
 struct TranslationResultRow: View {
     let result: TranslationResult
-    let audioService: AudioService
-    let aiService: AIAssistantService
-    let speechRate: Float
+    let sourceText: String
+    let isFavorite: Bool
+    let onFavoriteToggle: () -> Void
+    var onLoad: (() -> Void)? = nil
 
     @State private var showCopyConfirmation = false
     @State private var isAnalysisExpanded = false
     @State private var isAIEnhancedExpanded = false
     @State private var isSpeaking = false
     @State private var analysis: LinguisticAnalysis?
-    @State private var service = TranslationService()
+    @State private var translationService = TranslationService()
+    @State private var audioService = AudioService()
+    @State private var aiService = AIAssistantService()
+    @AppStorage("defaultSpeechRate") private var speechRate: Double = 0.5
     @AppStorage("includeLinguisticAnalysis") private var includeLinguisticAnalysis: Bool = true
 
+    private var sourceLangName: String {
+        guard let sourceLang = result.sourceLanguage else { return "" }
+        return Locale.current.localizedString(forLanguageCode: sourceLang.minimalIdentifier) ?? sourceLang.minimalIdentifier
+    }
+
+    private var targetLangName: String {
+        Locale.current.localizedString(forLanguageCode: result.language.minimalIdentifier) ?? result.language.minimalIdentifier
+    }
+
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sourceSection
+            Divider()
+            targetSection
+        }
+        .onChange(of: result.id) { _, _ in analysis = nil }
+        .sensoryFeedback(.success, trigger: showCopyConfirmation)
+    }
+
+    @ViewBuilder
+    private var sourceSection: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(sourceLangName)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Text(sourceText)
+                    .font(.title2.bold())
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Image(systemName: "play.circle.fill")
+                .font(.title2)
+                .foregroundStyle(.primary.opacity(0.3))
+        }
+        .padding()
+        .contentShape(Rectangle())
+        .onTapGesture { onLoad?() }
+    }
+
+    @ViewBuilder
+    private var targetSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Translation text
-            Text(result.translation)
-                .font(.body)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: result.layoutDirection == .rightToLeft ? .trailing : .leading)
-                .environment(\.layoutDirection, result.layoutDirection)
-
-            // Romanization (target)
-            if let romanization = result.romanization {
-                HStack(spacing: 6) {
-                    Text(romanization)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .italic()
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(targetLangName)
+                        .font(.subheadline)
+                        .foregroundStyle(.accent)
+                    Text(result.translation)
+                        .font(.title2)
+                        .foregroundStyle(.accent)
                         .textSelection(.enabled)
-                }
-                .padding(.vertical, 4)
-            }
-
-            // Linguistic Analysis (expandable) - only show for supported languages
-            if includeLinguisticAnalysis && service.supportsLinguisticAnalysis(for: result.language) {
-                DisclosureGroup(
-                    isExpanded: $isAnalysisExpanded,
-                    content: {
-                        if let analysis = analysis, analysis.hasData {
-                            LinguisticAnalysisView(analysis: analysis, layoutDirection: result.layoutDirection)
-                                .padding(.top, 8)
-                        } else {
-                            HStack {
-                                ProgressView()
-                                    .controlSize(.small)
-                                Text("Analyzing...")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(.top, 8)
-                        }
-                    },
-                    label: {
-                        Label("Linguistic Analysis", systemImage: "brain")
+                        .frame(maxWidth: .infinity, alignment: result.layoutDirection == .rightToLeft ? .trailing : .leading)
+                        .environment(\.layoutDirection, result.layoutDirection)
+                    if let romanization = result.romanization {
+                        Text(romanization)
                             .font(.caption)
-                            .fontWeight(.medium)
                             .foregroundStyle(.secondary)
-                    }
-                )
-                .tint(.blue)
-                .onChange(of: isAnalysisExpanded) { _, isExpanded in
-                    if isExpanded && analysis == nil {
-                        performAnalysis()
+                            .italic()
+                            .textSelection(.enabled)
                     }
                 }
+                Button(action: toggleSpeech) {
+                    Image(systemName: isSpeaking ? "stop.circle.fill" : "play.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.accent)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isSpeaking ? "Stop speaking" : "Speak translation")
             }
 
-            // AI-Enhanced Features (expandable)
-            DisclosureGroup(
-                isExpanded: $isAIEnhancedExpanded,
-                content: {
-                    AIEnhancedView(translation: result, aiService: aiService)
-                        .padding(.top, 8)
-                },
-                label: {
-                    Label("AI Insights", systemImage: "sparkles")
+            HStack(spacing: 20) {
+                Button(action: onFavoriteToggle) {
+                    Image(systemName: isFavorite ? "star.fill" : "star")
+                        .foregroundStyle(isFavorite ? Color.yellow : Color.accentColor)
+                }
+                .accessibilityLabel(isFavorite ? "Remove from favorites" : "Add to favorites")
+
+                Button(action: copyToClipboard) {
+                    Image(systemName: showCopyConfirmation ? "checkmark" : "doc.on.doc")
+                        .foregroundStyle(.accent)
+                }
+                .accessibilityLabel(showCopyConfirmation ? "Copied" : "Copy translation")
+
+                Spacer(minLength: 0)
+            }
+            .buttonStyle(.plain)
+            .font(.title3)
+
+            if includeLinguisticAnalysis && translationService.supportsLinguisticAnalysis(for: result.language) {
+                DisclosureGroup(isExpanded: $isAnalysisExpanded) {
+                    if let analysis, analysis.hasData {
+                        LinguisticAnalysisView(analysis: analysis, layoutDirection: result.layoutDirection)
+                            .padding(.top, 6)
+                    } else {
+                        HStack {
+                            ProgressView().controlSize(.small)
+                            Text("Analyzing...")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.top, 6)
+                    }
+                } label: {
+                    Label("Linguistic Analysis", systemImage: "brain")
                         .font(.caption)
                         .fontWeight(.medium)
                         .foregroundStyle(.secondary)
                 }
-            )
-            .tint(.purple)
-
-            // Action buttons
-            HStack(spacing: 20) {
-                Button(
-                    isSpeaking ? "Stop" : "Speak",
-                    systemImage: isSpeaking ? "stop.circle.fill" : "speaker.wave.2",
-                    action: toggleSpeech
-                )
-                .labelStyle(.iconOnly)
-
-                Button(
-                    "Copy",
-                    systemImage: showCopyConfirmation ? "checkmark" : "doc.on.doc",
-                    action: copyToClipboard
-                )
-
-                Spacer()
+                .tint(.accentColor)
+                .onChange(of: isAnalysisExpanded) { _, isExpanded in
+                    if isExpanded && analysis == nil { performAnalysis() }
+                }
             }
-            .labelStyle(.iconOnly)
+
+            DisclosureGroup(isExpanded: $isAIEnhancedExpanded) {
+                AIEnhancedView(translation: result, aiService: aiService)
+                    .padding(.top, 6)
+            } label: {
+                Label("AI Insights", systemImage: "sparkles")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+            }
+            .tint(.accentColor)
         }
         .padding()
-        .background(Color.platformSecondaryBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .sensoryFeedback(.success, trigger: showCopyConfirmation)
-        .onChange(of: result.id) { _, _ in
-            // Reset analysis when translation changes
-            analysis = nil
-        }
     }
-
-    // MARK: - Actions
 
     private func copyToClipboard() {
         #if os(iOS)
@@ -130,17 +162,9 @@ struct TranslationResultRow: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(result.translation, forType: .string)
         #endif
-
-        // Show confirmation
-        withAnimation {
-            showCopyConfirmation = true
-        }
-
-        // Reset after 2 seconds
+        withAnimation { showCopyConfirmation = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            withAnimation {
-                showCopyConfirmation = false
-            }
+            withAnimation { showCopyConfirmation = false }
         }
     }
 
@@ -149,20 +173,13 @@ struct TranslationResultRow: View {
             audioService.stop()
             isSpeaking = false
         } else {
-            audioService.speak(
-                text: result.translation,
-                language: result.language,
-                rate: speechRate
-            )
+            audioService.speak(text: result.translation, language: result.language, rate: Float(speechRate))
             isSpeaking = true
-
-            // Monitor speech completion
             monitorSpeechCompletion()
         }
     }
 
     private func monitorSpeechCompletion() {
-        // Poll the audio service to detect when speech finishes
         Task {
             try? await Task.sleep(for: .milliseconds(100))
             while isSpeaking && audioService.isPlaying {
@@ -175,43 +192,23 @@ struct TranslationResultRow: View {
     }
 
     private func performAnalysis() {
-        // Only perform analysis if the language supports it
-        guard service.supportsLinguisticAnalysis(for: result.language) else {
-            return
-        }
-
-        // Perform linguistic analysis on the translated text
-        analysis = service.analyzeLinguistics(for: result.translation, language: result.language)
+        guard translationService.supportsLinguisticAnalysis(for: result.language) else { return }
+        analysis = translationService.analyzeLinguistics(for: result.translation, language: result.language)
     }
 }
 
 #Preview {
-    let audioService = AudioService()
-    let aiService = AIAssistantService()
-
-    VStack(spacing: 16) {
+    List {
         TranslationResultRow(
             result: TranslationResult(
-                language: Locale.Language(identifier: "es"),
+                language: Locale.Language(identifier: "ru"),
                 sourceLanguage: Locale.Language(identifier: "en"),
-                translation: "Hola, ¿cómo estás?",
+                translation: "Привет, мир!",
                 detectionConfidence: 0.95
             ),
-            audioService: audioService,
-            aiService: aiService,
-            speechRate: 0.5
-        )
-
-        TranslationResultRow(
-            result: TranslationResult(
-                language: Locale.Language(identifier: "fr"),
-                sourceLanguage: Locale.Language(identifier: "en"),
-                translation: "Bonjour, comment allez-vous?",
-                detectionConfidence: 0.65
-            ),
-            audioService: audioService,
-            aiService: aiService,
-            speechRate: 0.5
+            sourceText: "Hello, world!",
+            isFavorite: false,
+            onFavoriteToggle: {}
         )
 
         TranslationResultRow(
@@ -219,13 +216,12 @@ struct TranslationResultRow: View {
                 language: Locale.Language(identifier: "ja"),
                 sourceLanguage: Locale.Language(identifier: "en"),
                 translation: "こんにちは、お元気ですか？",
-                detectionConfidence: 0.45
+                detectionConfidence: 0.45,
+                romanization: "Konnichiwa, ogenki desu ka?"
             ),
-            audioService: audioService,
-            aiService: aiService,
-            speechRate: 0.5
+            sourceText: "Hello, how are you?",
+            isFavorite: true,
+            onFavoriteToggle: {}
         )
     }
-    .padding()
-    .background(Color.platformGroupedBackground)
 }

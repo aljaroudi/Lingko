@@ -11,20 +11,13 @@ data class TranslationUiState(
     val possibleSourceLanguages: List<DetectedLanguage> = emptyList(),
     val manualSourceLanguage: Language? = null,
     val selectedTargetLanguages: Set<Language> = LocaleHelper.getSmartDefaultLanguages(),
-    val activePriorityLanguage: Language? = null,
-    val translations: List<TranslationResult> = emptyList(),
+    val selectedTargetLanguage: Language? = null,
+    val translation: TranslationResult? = null,
     val isTranslating: Boolean = false,
     val showRomanization: Boolean = true,
     val isSpeaking: Boolean = false,
     val error: String? = null
 ) {
-    // Effective source language to use for translation (manual override or detected)
     val effectiveSourceLanguage: Language?
         get() = manualSourceLanguage ?: sourceLanguage?.language
-
-    // Get the translation result for the active priority language
-    val activeTranslation: TranslationResult?
-        get() = activePriorityLanguage?.let { priority ->
-            translations.firstOrNull { it.language == priority }
-        }
 }

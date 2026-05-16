@@ -128,6 +128,9 @@ fun HistoryScreen(
                             ) { group ->
                                 HistoryItem(
                                     group = group,
+                                    speakingItemId = uiState.speakingItemId,
+                                    onSpeak = { item -> viewModel.speak(group.groupId, item) },
+                                    onCopy = { text -> viewModel.copyToClipboard(text) },
                                     onFavoriteToggle = { viewModel.toggleFavorite(group.groupId) },
                                     onDelete = { viewModel.delete(group.groupId) },
                                     onEditTags = { editingGroupId = group.groupId }
