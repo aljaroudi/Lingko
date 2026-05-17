@@ -8,32 +8,8 @@
 import Foundation
 import SwiftUI
 
-/// Represents a tag (category) that can be applied to translation history items
-struct TagInfo: Identifiable, Hashable, Sendable {
-    let id: UUID
-    let name: String
-    let icon: String
-    let color: String?
-    let isSystem: Bool
-    let sortOrder: Int
-
-    init(
-        id: UUID = UUID(),
-        name: String,
-        icon: String,
-        color: String? = nil,
-        isSystem: Bool = false,
-        sortOrder: Int = 0
-    ) {
-        self.id = id
-        self.name = name
-        self.icon = icon
-        self.color = color
-        self.isSystem = isSystem
-        self.sortOrder = sortOrder
-    }
-
-    /// Color for the tag chip
+extension Tag {
+    @MainActor
     var chipColor: Color {
         if let color = color {
             return Color(hex: color) ?? .blue
@@ -42,10 +18,7 @@ struct TagInfo: Identifiable, Hashable, Sendable {
     }
 }
 
-// MARK: - Color Extension
-
 extension Color {
-    /// Initialize Color from hex string
     init?(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0
@@ -69,29 +42,5 @@ extension Color {
             blue:  Double(b) / 255,
             opacity: Double(a) / 255
         )
-    }
-
-    /// Convert Color to hex string
-    var hexString: String? {
-        #if os(iOS)
-        guard let components = UIColor(self).cgColor.components,
-              components.count >= 3 else {
-            return nil
-        }
-        #elseif os(macOS)
-        guard let components = NSColor(self).cgColor.components,
-              components.count >= 3 else {
-            return nil
-        }
-        #endif
-
-        let r = Float(components[0])
-        let g = Float(components[1])
-        let b = Float(components[2])
-
-        return String(format: "%02lX%02lX%02lX",
-                     lroundf(r * 255),
-                     lroundf(g * 255),
-                     lroundf(b * 255))
     }
 }

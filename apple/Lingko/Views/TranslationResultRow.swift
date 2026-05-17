@@ -156,12 +156,7 @@ struct TranslationResultRow: View {
     }
 
     private func copyToClipboard() {
-        #if os(iOS)
-        UIPasteboard.general.string = result.translation
-        #elseif os(macOS)
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(result.translation, forType: .string)
-        #endif
+        PlatformUtils.copyToPasteboard(result.translation)
         withAnimation { showCopyConfirmation = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             withAnimation { showCopyConfirmation = false }

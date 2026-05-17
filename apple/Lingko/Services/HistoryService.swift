@@ -154,56 +154,6 @@ struct HistoryService {
         }
     }
 
-    /// Search history by source or translated text
-    func searchHistory(query: String, context: ModelContext) -> [SavedTranslation] {
-        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedQuery.isEmpty else {
-            return fetchHistory(context: context)
-        }
-
-        // Note: Predicate searches both sourceText and the translations JSON string
-        // While not ideal for performance, it works for the scale of this app
-        let predicate = #Predicate<SavedTranslation> { translation in
-            translation.sourceText.localizedStandardContains(trimmedQuery) ||
-            translation.translations.localizedStandardContains(trimmedQuery)
-        }
-
-        let descriptor = FetchDescriptor<SavedTranslation>(
-            predicate: predicate,
-            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
-        )
-
-        do {
-            let results = try context.fetch(descriptor)
-            logger.debug("🔍 Search '\(trimmedQuery)' returned \(results.count) results")
-            return results
-        } catch {
-            logger.error("❌ Failed to search history: \(error.localizedDescription)")
-            return []
-        }
-    }
-
-    /// Fetch only favorite translations
-    func fetchFavorites(context: ModelContext) -> [SavedTranslation] {
-        let predicate = #Predicate<SavedTranslation> { translation in
-            translation.isFavorite == true
-        }
-
-        let descriptor = FetchDescriptor<SavedTranslation>(
-            predicate: predicate,
-            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
-        )
-
-        do {
-            let results = try context.fetch(descriptor)
-            logger.debug("⭐ Fetched \(results.count) favorites")
-            return results
-        } catch {
-            logger.error("❌ Failed to fetch favorites: \(error.localizedDescription)")
-            return []
-        }
-    }
-
     /// Fetch history filtered by tags
     func fetchHistory(filteredBy tags: [Tag], context: ModelContext) -> [SavedTranslation] {
         guard !tags.isEmpty else {

@@ -112,45 +112,6 @@ struct TagService {
         logger.info("✅ Initialized \(defaultTags.count) default tags")
     }
 
-    // MARK: - Tag Management for Translations
-
-    /// Add tags to a translation
-    func addTags(_ tags: [Tag], to translation: SavedTranslation, context: ModelContext) {
-        logger.info("🏷️ Adding \(tags.count) tags to translation")
-
-        if translation.tags == nil {
-            translation.tags = []
-        }
-
-        for tag in tags {
-            if !(translation.tags?.contains(where: { $0.id == tag.id }) ?? false) {
-                translation.tags?.append(tag)
-            }
-        }
-
-        do {
-            try context.save()
-            logger.info("✅ Tags added successfully")
-        } catch {
-            logger.error("❌ Failed to add tags: \(error.localizedDescription)")
-        }
-    }
-
-    /// Remove tags from a translation
-    func removeTags(_ tags: [Tag], from translation: SavedTranslation, context: ModelContext) {
-        logger.info("🗑️ Removing \(tags.count) tags from translation")
-
-        let tagIDs = Set(tags.map { $0.id })
-        translation.tags?.removeAll { tagIDs.contains($0.id) }
-
-        do {
-            try context.save()
-            logger.info("✅ Tags removed successfully")
-        } catch {
-            logger.error("❌ Failed to remove tags: \(error.localizedDescription)")
-        }
-    }
-
     /// Set tags for a translation (replaces all existing tags)
     func setTags(_ tags: [Tag], for translation: SavedTranslation, context: ModelContext) {
         logger.info("🏷️ Setting \(tags.count) tags for translation")
@@ -178,38 +139,5 @@ struct TagService {
 
         logger.info("✅ Found \(matchedTags.count) matching tags")
         return matchedTags
-    }
-
-    /// Get or create tags by names
-    func getOrCreateTags(byNames names: [String], context: ModelContext) -> [Tag] {
-        logger.info("🔍 Getting or creating tags: \(names.joined(separator: ", "))")
-
-        var result: [Tag] = []
-        let existingTags = fetchTags(context: context)
-
-        for name in names {
-            if let existingTag = existingTags.first(where: { $0.name.lowercased() == name.lowercased() }) {
-                result.append(existingTag)
-            } else {
-                // Create new tag
-                let newTag = Tag(
-                    name: name,
-                    icon: "tag",
-                    isSystem: false,
-                    sortOrder: existingTags.count + result.count + 1
-                )
-                context.insert(newTag)
-                result.append(newTag)
-                logger.info("➕ Created new tag: \(name)")
-            }
-        }
-
-        do {
-            try context.save()
-        } catch {
-            logger.error("❌ Failed to save tags: \(error.localizedDescription)")
-        }
-
-        return result
     }
 }

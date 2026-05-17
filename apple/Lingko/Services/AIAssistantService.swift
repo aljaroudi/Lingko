@@ -91,57 +91,6 @@ struct AIAssistantService {
         return []
     }
 
-    // MARK: - Formality Analysis
-
-    func explainFormality(for translation: String, language: Locale.Language) async -> String? {
-        logger.info("🤖 Explaining formality for '\(translation)' in \(language.minimalIdentifier)")
-        guard isAvailable else { return nil }
-
-        if #available(iOS 26.0, *) {
-            do {
-                let session = LanguageModelSession(model: model)
-                let prompt = "Is \"\(translation)\" formal, informal, or neutral in \(language.nameOrId)? Explain and say when to use it."
-                let response = try await session.respond(to: prompt)
-                logger.info("✅ Formality explained")
-                return response.content
-            } catch let error as LanguageModelSession.GenerationError {
-                if case .guardrailViolation = error { logger.info("ℹ️ Guardrail triggered for formality explanation") }
-                else { logger.error("❌ Failed to explain formality: \(error.localizedDescription)") }
-                return nil
-            } catch {
-                logger.error("❌ Failed to explain formality: \(error.localizedDescription)")
-                return nil
-            }
-        }
-        return nil
-    }
-
-    // MARK: - Formality Detection
-
-    func detectFormality(for translation: String, language: Locale.Language) async -> FormalityLevel? {
-        logger.info("🤖 Detecting formality for '\(translation)' in \(language.minimalIdentifier)")
-        guard isAvailable else { return nil }
-
-        if #available(iOS 26.0, *) {
-            do {
-                let session = LanguageModelSession(model: model)
-                let prompt = "Classify the formality of \"\(translation)\" in \(language.nameOrId)."
-                let response = try await session.respond(to: prompt, generating: GenerableFormality.self)
-                let formality = response.content.domain
-                logger.info("✅ Formality detected: \(formality.rawValue)")
-                return formality
-            } catch let error as LanguageModelSession.GenerationError {
-                if case .guardrailViolation = error { logger.info("ℹ️ Guardrail triggered for formality detection") }
-                else { logger.error("❌ Failed to detect formality: \(error.localizedDescription)") }
-                return nil
-            } catch {
-                logger.error("❌ Failed to detect formality: \(error.localizedDescription)")
-                return nil
-            }
-        }
-        return nil
-    }
-
     // MARK: - Cultural Context
 
     func getCulturalNotes(for translation: String, in language: Locale.Language) async -> String? {
@@ -161,70 +110,6 @@ struct AIAssistantService {
                 return nil
             } catch {
                 logger.error("❌ Failed to get cultural notes: \(error.localizedDescription)")
-                return nil
-            }
-        }
-        return nil
-    }
-
-    // MARK: - Idiom Explanation
-
-    func explainIdiom(_ text: String, in language: Locale.Language) async -> String? {
-        logger.info("🤖 Explaining idiom '\(text)' in \(language.minimalIdentifier)")
-        guard isAvailable else { return nil }
-
-        if #available(iOS 26.0, *) {
-            do {
-                let session = LanguageModelSession(model: model)
-                let prompt = """
-                Explain the idiom "\(text)" in \(language.nameOrId).
-                1. Literal word-by-word meaning
-                2. Figurative/actual meaning
-                3. When and how it's commonly used
-                """
-                let response = try await session.respond(to: prompt)
-                logger.info("✅ Idiom explained")
-                return response.content
-            } catch let error as LanguageModelSession.GenerationError {
-                if case .guardrailViolation = error { logger.info("ℹ️ Guardrail triggered for idiom explanation") }
-                else { logger.error("❌ Failed to explain idiom: \(error.localizedDescription)") }
-                return nil
-            } catch {
-                logger.error("❌ Failed to explain idiom: \(error.localizedDescription)")
-                return nil
-            }
-        }
-        return nil
-    }
-
-    // MARK: - General Question
-
-    func askAboutTranslation(
-        question: String,
-        translation: String,
-        language: Locale.Language
-    ) async -> String? {
-        logger.info("🤖 Question about '\(translation)': \(question)")
-        guard isAvailable else { return nil }
-
-        if #available(iOS 26.0, *) {
-            do {
-                let session = LanguageModelSession(model: model)
-                let prompt = """
-                Context: The translation "\(translation)" in \(language.nameOrId)
-                Question: \(question)
-
-                Provide a helpful, concise answer about this translation.
-                """
-                let response = try await session.respond(to: prompt)
-                logger.info("✅ Question answered")
-                return response.content
-            } catch let error as LanguageModelSession.GenerationError {
-                if case .guardrailViolation = error { logger.info("ℹ️ Guardrail triggered for question") }
-                else { logger.error("❌ Failed to answer question: \(error.localizedDescription)") }
-                return nil
-            } catch {
-                logger.error("❌ Failed to answer question: \(error.localizedDescription)")
                 return nil
             }
         }

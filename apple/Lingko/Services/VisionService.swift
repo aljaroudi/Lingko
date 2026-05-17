@@ -7,14 +7,12 @@
 
 import Foundation
 import Vision
-import CoreImage
 import OSLog
 #if os(iOS)
 import UIKit
 #elseif os(macOS)
 import AppKit
 #endif
-import NaturalLanguage
 
 @MainActor
 struct VisionService {
@@ -37,19 +35,6 @@ struct VisionService {
             throw VisionError.invalidImage
         }
         #endif
-
-        return try await recognizeText(in: cgImage)
-    }
-
-    /// Extract text from a CIImage
-    func extractText(from ciImage: CIImage) async throws -> [CapturedText] {
-        logger.info("📸 Starting text recognition from CIImage")
-
-        let context = CIContext()
-        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else {
-            logger.error("Failed to convert CIImage to CGImage")
-            throw VisionError.invalidImage
-        }
 
         return try await recognizeText(in: cgImage)
     }
@@ -78,18 +63,10 @@ struct VisionService {
                         return nil
                     }
 
-                    // Get language hints if available
-                    var detectedLanguage: String?
-                    if #available(iOS 16.0, macOS 13.0, *) {
-                        // iOS 16+ / macOS 13+ has language support in Vision
-                        detectedLanguage = nil  // Language detection handled separately
-                    }
-
                     return CapturedText(
                         text: topCandidate.string,
                         confidence: topCandidate.confidence,
-                        boundingBox: observation.boundingBox,
-                        detectedLanguage: detectedLanguage
+                        boundingBox: observation.boundingBox
                     )
                 }
 
@@ -117,25 +94,6 @@ struct VisionService {
         }
     }
 
-    // MARK: - Language Detection
-
-    /// Detect language in recognized text
-    func detectLanguage(in text: String) -> String? {
-        logger.debug("🔍 Detecting language for text: \(text.prefix(50))...")
-
-        if #available(iOS 16.0, macOS 13.0, *) {
-            let recognizer = NLLanguageRecognizer()
-            recognizer.processString(text)
-
-            if let dominantLanguage = recognizer.dominantLanguage {
-                logger.info("✅ Detected language: \(dominantLanguage.rawValue)")
-                return dominantLanguage.rawValue
-            }
-        }
-
-        logger.warning("⚠️ Could not detect language")
-        return nil
-    }
 }
 
 // MARK: - Errors
@@ -143,7 +101,6 @@ struct VisionService {
 enum VisionError: LocalizedError {
     case invalidImage
     case recognitionFailed(Error)
-    case noTextFound
 
     var errorDescription: String? {
         switch self {
@@ -151,8 +108,6 @@ enum VisionError: LocalizedError {
             return "Invalid image format"
         case .recognitionFailed(let error):
             return "Text recognition failed: \(error.localizedDescription)"
-        case .noTextFound:
-            return "No text found in image"
         }
     }
 
@@ -162,8 +117,6 @@ enum VisionError: LocalizedError {
             return "Please try a different image"
         case .recognitionFailed:
             return "Please ensure the image contains clear, readable text"
-        case .noTextFound:
-            return "Please capture an image with visible text"
         }
     }
 }

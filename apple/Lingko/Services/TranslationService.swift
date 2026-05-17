@@ -509,14 +509,11 @@ struct TranslationService {
 
             // Romanize target translation if needed
             var targetRomanization: String?
-            var romanizationSystem: RomanizationSystem?
-
             if includeRomanization && romanizationService.needsRomanization(language: targetLanguage) {
                 targetRomanization = romanizationService.romanize(
                     text: response.targetText,
                     language: targetLanguage
                 )
-                romanizationSystem = RomanizationSystem.defaultSystem(for: targetLanguage)
             }
 
             return TranslationResult(
@@ -526,7 +523,6 @@ struct TranslationService {
                 detectionConfidence: detectionConfidence,
                 romanization: targetRomanization,
                 sourceRomanization: sourceRomanization,
-                romanizationSystem: romanizationSystem,
                 linguisticAnalysis: nil
             )
         } catch {

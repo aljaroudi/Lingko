@@ -32,7 +32,6 @@ struct TranslationView: View {
     @Binding var inputText: String
     @State private var translations: [TranslationResult] = []
     @State private var activePriorityLanguage: Locale.Language?
-    @State private var isTranslating = false
     @State private var loadingLanguages: Set<Locale.Language> = []
     @State private var showImageTranslation = false
     @State private var showSettings = false
@@ -60,7 +59,6 @@ struct TranslationView: View {
         )
     }
     @State private var debounceTask: Task<Void, Never>?
-    @State private var detectedLanguages: [(language: Locale.Language, confidence: Double, isDownloaded: Bool)] = []
     @State private var selectedSourceLanguage: Locale.Language? = nil
     @State private var currentSourceLanguage: Locale.Language? = nil
     @State private var installedLanguages: Set<Locale.Language> = []
@@ -676,10 +674,8 @@ struct TranslationView: View {
         // Clear translations if text is empty
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             translations = []
-            detectedLanguages = []
             currentSourceLanguage = selectedSourceLanguage
             sourceRomanization = nil
-            isTranslating = false
             loadingLanguages = []
             currentSavedTranslation = nil
             clearPendingAutosave(resetLastCommitted: true)
@@ -705,7 +701,6 @@ struct TranslationView: View {
     private func performTranslation(text: String, requestID: UUID) async {
         guard requestID == latestTranslationRequestID else { return }
 
-        isTranslating = true
         errorMessage = nil
         sourceRomanization = nil
 
@@ -717,7 +712,6 @@ struct TranslationView: View {
             // Note: Source language doesn't need to be downloaded, only target languages do
             let sourceLanguage: Locale.Language
             if let manual = selectedSourceLanguage {
-                detectedLanguages = []
                 sourceLanguage = manual
             } else {
                 // Detect languages with preference for user-selected languages
@@ -727,7 +721,6 @@ struct TranslationView: View {
                     installedLanguages: installedLanguages,
                     maxResults: 5
                 )
-                detectedLanguages = detected
 
                 // Find best language that's also user-selected
                 let detectedAndSelected = detected.first { result in
@@ -790,7 +783,6 @@ struct TranslationView: View {
             }
 
             // Clear loading state
-            isTranslating = false
             loadingLanguages = []
 
             updatePendingAutosaveSnapshot(
@@ -805,7 +797,6 @@ struct TranslationView: View {
         } catch {
             guard requestID == latestTranslationRequestID else { return }
 
-            isTranslating = false
             loadingLanguages = []
             if let translationError = error as? TranslationError,
                case .missingLanguagePacks = translationError {
@@ -1134,10 +1125,6 @@ private final class KeyboardLanguageTextView: UITextView {
 
 private func localizedLanguageName(for language: Locale.Language) -> String {
     Locale.current.localizedString(forLanguageCode: language.minimalIdentifier) ?? language.minimalIdentifier
-}
-
-private func sortedLanguages(_ languages: [Locale.Language]) -> [Locale.Language] {
-    languages.sorted { localizedLanguageName(for: $0) < localizedLanguageName(for: $1) }
 }
 
 #Preview {

@@ -236,7 +236,7 @@ struct CameraTranslationView: View {
 
         // Auto-save to history if enabled
         if autoSaveToHistory && !results.isEmpty {
-            await historyService.saveTranslations(
+            _ = await historyService.saveTranslations(
                 results,
                 sourceText: text,
                 context: modelContext,

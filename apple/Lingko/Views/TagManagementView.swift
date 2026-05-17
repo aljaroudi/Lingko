@@ -125,21 +125,14 @@ private struct TagManagementRow: View {
     let tag: Tag
     let onDelete: () -> Void
 
-    var chipColor: Color {
-        if let hex = tag.color {
-            return Color(hex: hex) ?? .blue
-        }
-        return .blue
-    }
-
     var body: some View {
         HStack(spacing: 12) {
             // Tag icon
             Image(systemName: tag.icon)
                 .font(.title3)
-                .foregroundStyle(chipColor)
+                .foregroundStyle(tag.chipColor)
                 .frame(width: 40, height: 40)
-                .background(chipColor.opacity(0.15))
+                .background(tag.chipColor.opacity(0.15))
                 .clipShape(Circle())
 
             // Tag details

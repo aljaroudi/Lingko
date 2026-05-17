@@ -99,26 +99,6 @@ final class AudioService {
         }
     }
 
-    /// Pause the current speech
-    func pause() {
-        DispatchQueue.main.async {
-            if self.synthesizer.isSpeaking && !self.synthesizer.isPaused {
-                self.logger.info("⏸️  Pausing speech")
-                self.synthesizer.pauseSpeaking(at: .word)
-            }
-        }
-    }
-
-    /// Resume paused speech
-    func resume() {
-        DispatchQueue.main.async {
-            if self.synthesizer.isPaused {
-                self.logger.info("▶️  Resuming speech")
-                self.synthesizer.continueSpeaking()
-            }
-        }
-    }
-
     // MARK: - State
 
     /// Whether the synthesizer is currently speaking

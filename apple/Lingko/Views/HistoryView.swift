@@ -195,7 +195,7 @@ struct HistoryView: View {
                     isSelected: selectedTagFilter == nil,
                     name: "All",
                     icon: "circle.grid.2x2",
-                    color: nil
+                    color: .blue
                 ) {
                     selectedTagFilter = nil
                 }
@@ -206,7 +206,7 @@ struct HistoryView: View {
                         isSelected: selectedTagFilter?.id == tag.id,
                         name: tag.name,
                         icon: tag.icon,
-                        color: tag.color
+                        color: tag.chipColor
                     ) {
                         if selectedTagFilter?.id == tag.id {
                             selectedTagFilter = nil
@@ -508,12 +508,7 @@ private struct TargetBlock: View {
     }
 
     private func copyToClipboard() {
-        #if os(iOS)
-        UIPasteboard.general.string = entry.text
-        #elseif os(macOS)
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(entry.text, forType: .string)
-        #endif
+        PlatformUtils.copyToPasteboard(entry.text)
         withAnimation { showCopyConfirmation = true }
         Task {
             try? await Task.sleep(for: .seconds(2))
@@ -527,13 +522,6 @@ private struct TargetBlock: View {
 private struct TagChip: View {
     let tag: Tag
 
-    var chipColor: Color {
-        if let hex = tag.color {
-            return Color(hex: hex) ?? .blue
-        }
-        return .blue
-    }
-
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: tag.icon)
@@ -544,8 +532,8 @@ private struct TagChip: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(chipColor.opacity(0.15))
-        .foregroundStyle(chipColor)
+        .background(tag.chipColor.opacity(0.15))
+        .foregroundStyle(tag.chipColor)
         .clipShape(Capsule())
     }
 }
@@ -554,15 +542,8 @@ private struct TagFilterChip: View {
     let isSelected: Bool
     let name: String
     let icon: String
-    let color: String?
+    let color: Color
     let action: () -> Void
-
-    var chipColor: Color {
-        if let hex = color {
-            return Color(hex: hex) ?? .blue
-        }
-        return .blue
-    }
 
     var body: some View {
         Button(action: action) {
@@ -576,9 +557,9 @@ private struct TagFilterChip: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             #if os(iOS)
-            .background(isSelected ? chipColor : Color(.systemGray5))
+            .background(isSelected ? color : Color(.systemGray5))
             #elseif os(macOS)
-            .background(isSelected ? chipColor : Color.secondary.opacity(0.2))
+            .background(isSelected ? color : Color.secondary.opacity(0.2))
             #endif
             .foregroundStyle(isSelected ? .white : .primary)
             .clipShape(Capsule())

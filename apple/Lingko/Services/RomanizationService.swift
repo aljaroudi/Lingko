@@ -67,16 +67,6 @@ struct RomanizationService {
         return result
     }
 
-    /// Get available romanization systems for a language
-    func availableSystems(for language: Locale.Language) -> [RomanizationSystem] {
-        RomanizationSystem.systems(for: language)
-    }
-
-    /// Detect the script used by a language
-    func detectScript(for text: String, language: Locale.Language) -> Script {
-        Script.detect(from: language)
-    }
-
     /// Check if a language uses a non-Latin script and needs romanization
     func needsRomanization(language: Locale.Language) -> Bool {
         let script = Script.detect(from: language)

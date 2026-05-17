@@ -151,7 +151,7 @@ struct AIInsightsDetailView: View {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(Array(exampleSentences.enumerated()), id: \.offset) { index, sentence in
                     HStack(alignment: .top, spacing: 10) {
-                        Text("\(index + 1).")
+                        Text(index + 1, format: .number)
                             .font(.callout).foregroundStyle(.secondary)
                             .frame(width: 20, alignment: .trailing)
                         Text(sentence).font(.callout)
