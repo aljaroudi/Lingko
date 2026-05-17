@@ -462,23 +462,24 @@ private struct TargetBlock: View {
 
             // Action row
             HStack(spacing: 20) {
-                NavigationLink(value: detailDestination) {
-                    Image(systemName: "info.circle")
-                        .foregroundStyle(.primary.opacity(0.4))
+                Button(action: copyToClipboard) {
+                    Image(systemName: showCopyConfirmation ? "checkmark" : "doc.on.doc")
+                        .foregroundStyle(.accent)
                 }
-                .accessibilityLabel("View details")
-
+                .accessibilityLabel(showCopyConfirmation ? "Copied" : "Copy translation")
+                
                 Button(action: onToggleFavorite) {
                     Image(systemName: isFavorite ? "star.fill" : "star")
                         .foregroundStyle(isFavorite ? Color.yellow : Color.accentColor)
                 }
                 .accessibilityLabel(isFavorite ? "Remove from favorites" : "Add to favorites")
 
-                Button(action: copyToClipboard) {
-                    Image(systemName: showCopyConfirmation ? "checkmark" : "doc.on.doc")
-                        .foregroundStyle(.accent)
+                NavigationLink(value: detailDestination) {
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(.primary.opacity(0.4))
                 }
-                .accessibilityLabel(showCopyConfirmation ? "Copied" : "Copy translation")
+                .accessibilityLabel("View details")
+                .navigationLinkIndicatorVisibility(.hidden)
 
                 Spacer(minLength: 0)
             }

@@ -13,12 +13,15 @@ private enum DownloadState: Equatable {
     case queued
     case downloading
     case installed
+    case unsupported
     case error(String)
 }
 
 struct LanguageDownloadView: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var translationService = TranslationService()
     @State private var states: [String: DownloadState] = [:]
+    @State private var supportedLanguages: [Locale.Language] = []
     @State private var isLoading = true
     @State private var downloadQueue: [LanguageInfo] = []
     @State private var currentDownload: LanguageInfo?
@@ -85,13 +88,13 @@ struct LanguageDownloadView: View {
 
     private var installedLanguages: [LanguageInfo] {
         SupportedLanguages.all.filter { lang in
-            lang.code == "en" || stateFor(lang) == .installed
+            isFrameworkSupported(lang) && (lang.code == "en" || stateFor(lang) == .installed)
         }.sorted { $0.name < $1.name }
     }
 
     private var availableLanguages: [LanguageInfo] {
         SupportedLanguages.all.filter { lang in
-            lang.code != "en" && stateFor(lang) != .installed
+            isFrameworkSupported(lang) && lang.code != "en" && stateFor(lang) != .installed
         }.sorted { $0.name < $1.name }
     }
 
@@ -135,6 +138,8 @@ struct LanguageDownloadView: View {
             }
             .labelStyle(.iconOnly)
             .controlSize(.small)
+        case .unsupported:
+            EmptyView()
         }
     }
 
@@ -142,12 +147,18 @@ struct LanguageDownloadView: View {
 
     private func stateFor(_ lang: LanguageInfo) -> DownloadState {
         if lang.code == "en" { return .installed }
+        guard isFrameworkSupported(lang) else { return .unsupported }
         return states[lang.code] ?? .supported
+    }
+
+    private func isFrameworkSupported(_ lang: LanguageInfo) -> Bool {
+        lang.code == "en" || translationService.isLanguageSupported(lang.language, in: supportedLanguages)
     }
 
     // MARK: - Download Logic
 
     private func enqueue(_ lang: LanguageInfo) {
+        guard isFrameworkSupported(lang) else { return }
         guard stateFor(lang) == .supported || states[lang.code]?.isError == true else { return }
         states[lang.code] = .queued
         downloadQueue.append(lang)
@@ -170,18 +181,28 @@ struct LanguageDownloadView: View {
     // MARK: - Status Loading
 
     private func loadStatuses() async {
-        let availability = LanguageAvailability()
         let english = Locale.Language(identifier: "en")
+        let loadedSupportedLanguages = await translationService.getSupportedLanguages()
+        supportedLanguages = loadedSupportedLanguages
 
         for lang in SupportedLanguages.all where lang.code != "en" {
-            let status = await availability.status(from: english, to: lang.language)
+            guard translationService.isLanguageSupported(lang.language, in: loadedSupportedLanguages) else {
+                states[lang.code] = .unsupported
+                continue
+            }
+
+            let status = await translationService.getLanguageStatus(
+                from: english,
+                to: lang.language,
+                supportedLanguages: loadedSupportedLanguages
+            )
             switch status {
             case .installed:
                 states[lang.code] = .installed
             case .supported:
                 states[lang.code] = .supported
             case .unsupported:
-                break
+                states[lang.code] = .unsupported
             @unknown default:
                 break
             }

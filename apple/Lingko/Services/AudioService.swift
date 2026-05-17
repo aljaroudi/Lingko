@@ -10,6 +10,7 @@ import AVFoundation
 import OSLog
 
 @MainActor
+@Observable
 final class AudioService {
     private let logger = Logger(subsystem: "com.lingko.audio", category: "service")
     private let synthesizer: AVSpeechSynthesizer

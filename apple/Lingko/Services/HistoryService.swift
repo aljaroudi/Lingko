@@ -24,8 +24,8 @@ struct HistoryService {
         context: ModelContext,
         aiService: AIAssistantService? = nil,
         tagService: TagService? = nil
-    ) async {
-        guard !results.isEmpty else { return }
+    ) async -> SavedTranslation? {
+        guard !results.isEmpty else { return nil }
 
         // Encode all translation results into JSON
         let translationEntries: [[String: Any?]] = results.map { result in
@@ -40,7 +40,7 @@ struct HistoryService {
         guard let jsonData = try? JSONSerialization.data(withJSONObject: translationEntries),
               let jsonString = String(data: jsonData, encoding: .utf8) else {
             logger.error("❌ Failed to encode translations to JSON")
-            return
+            return nil
         }
 
         let sourceLanguageCode = results.first?.sourceLanguage?.minimalIdentifier
@@ -69,11 +69,12 @@ struct HistoryService {
                     // Apply AI-suggested tags if services provided
                     if let aiService = aiService, let tagService = tagService {
                         logger.info("🤖 Requesting AI tag suggestions...")
-                        let suggestedTagNames = await aiService.suggestTags(for: sourceText)
+                        let existingTags = tagService.fetchTags(context: context)
+                        let suggestedTagNames = await aiService.suggestTags(for: sourceText, existingTagNames: existingTags.map(\.name))
 
                         if !suggestedTagNames.isEmpty {
                             logger.info("🏷️ AI suggested tags: \(suggestedTagNames.joined(separator: ", "))")
-                            let tags = tagService.getOrCreateTags(byNames: suggestedTagNames, context: context)
+                            let tags = tagService.findTags(byNames: suggestedTagNames, context: context)
                             // Merge with existing tags (avoid duplicates)
                             let existingTagIds = Set(candidate.tags?.map { $0.id } ?? [])
                             let newTags = tags.filter { !existingTagIds.contains($0.id) }
@@ -86,7 +87,7 @@ struct HistoryService {
                     try context.save()
                     let tagInfo = candidate.tags?.map { $0.name }.joined(separator: ", ") ?? "none"
                     logger.info("🔄 Updated duplicate translation timestamp: \(sourceText.prefix(30))... → \(results.count) languages, tags: \(tagInfo)")
-                    return
+                    return candidate
                 }
             }
         } catch {
@@ -109,11 +110,12 @@ struct HistoryService {
         // Apply AI-suggested tags if services provided
         if let aiService = aiService, let tagService = tagService {
             logger.info("🤖 Requesting AI tag suggestions...")
-            let suggestedTagNames = await aiService.suggestTags(for: sourceText)
+            let existingTags = tagService.fetchTags(context: context)
+            let suggestedTagNames = await aiService.suggestTags(for: sourceText, existingTagNames: existingTags.map(\.name))
 
             if !suggestedTagNames.isEmpty {
                 logger.info("🏷️ AI suggested tags: \(suggestedTagNames.joined(separator: ", "))")
-                let tags = tagService.getOrCreateTags(byNames: suggestedTagNames, context: context)
+                let tags = tagService.findTags(byNames: suggestedTagNames, context: context)
                 savedTranslation.tags = tags
             }
         }
@@ -122,8 +124,10 @@ struct HistoryService {
             try context.save()
             let tagInfo = savedTranslation.tags?.map { $0.name }.joined(separator: ", ") ?? "none"
             logger.info("💾 Saved translation: \(sourceText.prefix(30))... → \(results.count) languages, tags: \(tagInfo)")
+            return savedTranslation
         } catch {
             logger.error("❌ Failed to save translations: \(error.localizedDescription)")
+            return nil
         }
     }
 

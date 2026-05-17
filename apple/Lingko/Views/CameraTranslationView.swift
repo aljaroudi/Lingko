@@ -247,24 +247,7 @@ struct CameraTranslationView: View {
     }
     
     private func loadInstalledLanguages() async {
-        // Check which languages are installed by testing against a reference language
-        let referenceLanguage = Locale.Language(identifier: "en")
-        var installed: Set<Locale.Language> = []
-        
-        for languageInfo in SupportedLanguages.all {
-            let language = languageInfo.language
-            
-            // Check if this language pair is installed
-            let isInstalled = await translationService.isLanguageInstalled(
-                from: referenceLanguage,
-                to: language
-            )
-            if isInstalled {
-                installed.insert(language)
-            }
-        }
-        
-        installedLanguages = installed
+        installedLanguages = await translationService.installedLanguages()
     }
 }
 
