@@ -26,6 +26,12 @@
             "value" : "%lld idiomas"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld языков"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -54,6 +60,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "100% en el dispositivo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "100% на устройстве"
           }
         },
         "zh-Hans" : {
@@ -86,6 +98,12 @@
             "value" : "Acerca de"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "О приложении"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -116,6 +134,12 @@
             "value" : "Accesibilidad"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Универсальный доступ"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -132,6 +156,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "تفضيل"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zu Favoriten hinzufügen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir a favoritos"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить в избранное"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加到收藏"
           }
         }
       }
@@ -156,6 +204,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Insights de IA"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Аналитика ИИ"
           }
         },
         "zh-Hans" : {
@@ -188,6 +242,12 @@
             "value" : "Todas las etiquetas"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Все теги"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -203,7 +263,7 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "تتم جميع الترجمات ومعالجة البيانات بالكامل على جهازك. لا يتم إرسال أي بيانات إلى خوادم خارجية."
+            "value" : "جميع الترجمات تُعالَج بالكامل على جهازك. لا تُرسَل أي بيانات إلى جهات خارجية."
           }
         },
         "de" : {
@@ -216,6 +276,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Todas las traducciones y el procesamiento de datos ocurren completamente en tu dispositivo. Nunca se envía ningún dato a servidores externos."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Все переводы и обработка данных выполняются полностью на вашем устройстве. Данные никогда не отправляются на внешние серверы."
           }
         },
         "zh-Hans" : {
@@ -248,6 +314,12 @@
             "value" : "Traducciones alternativas"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Альтернативные переводы"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -276,6 +348,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Analizando..."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Анализ…"
           }
         },
         "zh-Hans" : {
@@ -308,6 +386,12 @@
             "value" : "¿Estás seguro de que quieres eliminar '%@'? Esto eliminará la etiqueta de todas las traducciones."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить «%@»? Тег будет удалён из всех переводов."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -338,10 +422,52 @@
             "value" : "¿Estás seguro de que quieres eliminar todo el historial de traducciones? Esta acción no se puede deshacer."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить всю историю переводов? Это действие нельзя отменить."
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "确定要删除所有翻译历史吗？此操作无法撤销。"
+          }
+        }
+      }
+    },
+    "At least two languages must remain enabled." : {
+      "comment" : "A footer for a list of languages.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يجب تفعيل لغتين على الأقل"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mindestens zwei Sprachen müssen aktiviert bleiben."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se deben mantener activados al menos dos idiomas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Должно быть включено как минимум два языка."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "必须至少启用两种语言。"
           }
         }
       }
@@ -366,6 +492,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Audio"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Аудио"
           }
         },
         "zh-Hans" : {
@@ -398,6 +530,12 @@
             "value" : "Automático"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Авто"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -426,6 +564,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Guardar traducciones automáticamente"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Автосохранение переводов"
           }
         },
         "zh-Hans" : {
@@ -458,6 +602,12 @@
             "value" : "Disponible"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доступно"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -486,6 +636,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cancelar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отмена"
           }
         },
         "zh-Hans" : {
@@ -518,6 +674,12 @@
             "value" : "Limpiar todo"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Очистить всё"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -546,6 +708,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Limpiar todo el historial"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Очистить всю историю"
           }
         },
         "zh-Hans" : {
@@ -578,6 +746,12 @@
             "value" : "Color"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цвет"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -608,6 +782,12 @@
             "value" : "Configurar el comportamiento predeterminado para las traducciones"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Настройка поведения переводов по умолчанию"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -625,6 +805,30 @@
             "state" : "translated",
             "value" : "نُسِخ"
           }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopiert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скопировано"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已复制"
+          }
         }
       }
     },
@@ -636,6 +840,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "نسخ الترجمة"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Übersetzung kopieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiar traducción"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Копировать перевод"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制翻译"
           }
         }
       }
@@ -660,6 +888,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Crear"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создать"
           }
         },
         "zh-Hans" : {
@@ -692,6 +926,12 @@
             "value" : "Crear etiqueta"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создать тег"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -720,6 +960,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Crea etiquetas en Gestión de etiquetas para organizar tus traducciones"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создавайте теги в разделе управления тегами для организации переводов"
           }
         },
         "zh-Hans" : {
@@ -752,6 +998,12 @@
             "value" : "Crea etiquetas para organizar tu historial de traducciones"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создавайте теги для организации истории переводов"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -780,6 +1032,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Contexto cultural"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Культурный контекст"
           }
         },
         "zh-Hans" : {
@@ -812,6 +1070,12 @@
             "value" : "Personalizar funciones de accesibilidad"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Настройка функций универсального доступа"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -840,6 +1104,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Velocidad predeterminada para la reproducción de texto a voz"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скорость воспроизведения речи по умолчанию"
           }
         },
         "zh-Hans" : {
@@ -872,6 +1142,12 @@
             "value" : "Eliminar"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -902,6 +1178,12 @@
             "value" : "Eliminar etiqueta"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить тег"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -918,6 +1200,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "التفاصيل"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Details"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detalles"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подробности"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "详情"
           }
         }
       }
@@ -942,6 +1248,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hecho"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Готово"
           }
         },
         "zh-Hans" : {
@@ -974,6 +1286,12 @@
             "value" : "Descargar"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скачать"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1000,6 +1318,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Descarga al menos 2 idiomas para comenzar a traducir"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скачайте как минимум 2 языка, чтобы начать перевод"
           }
         },
         "zh-Hans" : {
@@ -1032,6 +1356,12 @@
             "value" : "Descargar idiomas"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скачать языки"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1060,6 +1390,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Descargar más idiomas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скачать ещё языки"
           }
         },
         "zh-Hans" : {
@@ -1092,6 +1428,12 @@
             "value" : "Editar etiquetas"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Изменить теги"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1120,6 +1462,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ingresa el nombre de la etiqueta"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Введите название тега"
           }
         },
         "zh-Hans" : {
@@ -1152,6 +1500,12 @@
             "value" : "Ingresa texto"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Введите текст"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1178,6 +1532,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ingresa texto arriba para traducir a varios idiomas simultáneamente"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Введите текст выше для одновременного перевода на несколько языков"
           }
         },
         "zh-Hans" : {
@@ -1210,6 +1570,12 @@
             "value" : "Oraciones de ejemplo"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Примеры предложений"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1238,6 +1604,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Favorito"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Избранное"
           }
         },
         "zh-Hans" : {
@@ -1270,6 +1642,12 @@
             "value" : "Solo favoritos"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Только избранное"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1298,6 +1676,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Repositorio de GitHub"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Репозиторий GitHub"
           }
         },
         "zh-Hans" : {
@@ -1330,6 +1714,12 @@
             "value" : "Retroalimentación háptica"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тактильный отклик"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1358,6 +1748,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Historial"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "История"
           }
         },
         "zh-Hans" : {
@@ -1390,6 +1786,12 @@
             "value" : "Icono"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Значок"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1418,6 +1820,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Traducción de imágenes"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перевод с изображения"
           }
         },
         "zh-Hans" : {
@@ -1450,6 +1858,12 @@
             "value" : "Importar imagen"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Импортировать изображение"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1478,6 +1892,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Instalado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Установлено"
           }
         },
         "zh-Hans" : {
@@ -1510,10 +1930,52 @@
             "value" : "Gestión de idiomas"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Управление языками"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "语言管理"
+          }
+        }
+      }
+    },
+    "Languages" : {
+      "comment" : "A label for a section that displays a list of available languages.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اللغات"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sprachen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Idiomas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Языки"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "语言"
           }
         }
       }
@@ -1538,6 +2000,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Iniciar al iniciar sesión"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запускать при входе"
           }
         },
         "zh-Hans" : {
@@ -1575,6 +2043,12 @@
             "value" : "Análisis lingüístico"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Лингвистический анализ"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1603,6 +2077,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cargando idiomas..."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Загрузка языков…"
           }
         },
         "zh-Hans" : {
@@ -1635,6 +2115,12 @@
             "value" : "Gestionar etiquetas"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Управление тегами"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1663,6 +2149,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Entidades nombradas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Именованные сущности"
           }
         },
         "zh-Hans" : {
@@ -1695,6 +2187,12 @@
             "value" : "No hay traducciones alternativas disponibles"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет доступных альтернатив"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1723,6 +2221,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No hay notas culturales disponibles"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет доступных культурных заметок"
           }
         },
         "zh-Hans" : {
@@ -1755,6 +2259,12 @@
             "value" : "No hay ejemplos disponibles"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет доступных примеров"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1783,6 +2293,12 @@
             "value" : "Aún no hay favoritos"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пока нет избранного"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1798,7 +2314,7 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "لم يتم العثور على نتائج"
+            "value" : "لا توجد نتائج"
           }
         },
         "de" : {
@@ -1811,6 +2327,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No se encontraron resultados"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Результаты не найдены"
           }
         },
         "zh-Hans" : {
@@ -1843,6 +2365,12 @@
             "value" : "Sin etiquetas"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет тегов"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1871,6 +2399,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No hay etiquetas disponibles"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет доступных тегов"
           }
         },
         "zh-Hans" : {
@@ -1903,6 +2437,12 @@
             "value" : "Sin historial de traducciones"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет истории переводов"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1929,6 +2469,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No hay traducciones que coincidan con \"%@\""
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет переводов, соответствующих «%@»"
           }
         },
         "zh-Hans" : {
@@ -1961,6 +2507,12 @@
             "value" : "Abrir configuración de la app"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открыть настройки приложения"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1989,6 +2541,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Partes de la oración"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Части речи"
           }
         },
         "zh-Hans" : {
@@ -2021,6 +2579,12 @@
             "value" : "Vista previa"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Предпросмотр"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2051,6 +2615,12 @@
             "value" : "Privacidad"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Конфиденциальность"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2077,6 +2647,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Listo para traducir"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Готово к переводу"
           }
         },
         "zh-Hans" : {
@@ -2109,6 +2685,12 @@
             "value" : "Reconociendo texto..."
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Распознавание текста…"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2139,6 +2721,12 @@
             "value" : "Reducir movimiento"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Уменьшение движения"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2155,6 +2743,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "إلغاء التفضيل"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aus Favoriten entfernen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitar de favoritos"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Убрать из избранного"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从收藏中移除"
           }
         }
       }
@@ -2179,6 +2791,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reintentar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Повторить"
           }
         },
         "zh-Hans" : {
@@ -2211,6 +2829,12 @@
             "value" : "Romanización"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Романизация"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2241,6 +2865,12 @@
             "value" : "Buscar traducciones"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поиск переводов"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2251,7 +2881,39 @@
     },
     "Select language" : {
       "comment" : "A label displayed when no language is selected.",
-      "isCommentAutoGenerated" : true
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اختر اللغة"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sprache auswählen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seleccionar idioma"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите язык"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择语言"
+          }
+        }
+      }
     },
     "Settings" : {
       "comment" : "The title of the settings view.",
@@ -2275,6 +2937,12 @@
             "value" : "Configuración"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Настройки"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2283,47 +2951,113 @@
         }
       }
     },
-    "Show parts of speech and named entities" : {
-      "comment" : "A toggle label that enables or disables the display of parts of speech and named entities in translation results.",
+    "Speak source" : {
+      "comment" : "A button that starts or stops speaking the source text.",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "إظهار أقسام الكلام والكيانات المسماة"
+            "value" : "نطق المصدر"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wortarten und benannte Entitäten anzeigen"
+            "value" : "Quelle sprechen"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mostrar partes de la oración y entidades nombradas"
+            "value" : "Hablar origen"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Озвучить исходный текст"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "显示词性和专有名词"
+            "value" : "朗读原文"
           }
         }
       }
     },
-    "Speak source" : {
-      "comment" : "A button that starts or stops speaking the source text.",
-      "isCommentAutoGenerated" : true
-    },
     "Speak source text" : {
       "comment" : "A label for a button that speaks the source text.",
-      "isCommentAutoGenerated" : true
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نطق نص المصدر"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quelltext sprechen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hablar texto de origen"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Озвучить исходный текст"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "朗读原文文本"
+          }
+        }
+      }
     },
     "Speak translation" : {
       "comment" : "A button that speaks the translation aloud.",
-      "isCommentAutoGenerated" : true
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نطق الترجمة"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Übersetzung sprechen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hablar traducción"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Озвучить перевод"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "朗读翻译"
+          }
+        }
+      }
     },
     "Speech Rate" : {
       "comment" : "A label describing the text-to-speech speed slider.",
@@ -2347,6 +3081,12 @@
             "value" : "Velocidad de habla"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скорость речи"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2357,19 +3097,147 @@
     },
     "Start voice input" : {
       "comment" : "A button that starts voice input.",
-      "isCommentAutoGenerated" : true
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بدء الإدخال الصوتي"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spracheingabe starten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Iniciar entrada de voz"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Начать голосовой ввод"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开始语音输入"
+          }
+        }
+      }
     },
     "Stop recording" : {
       "comment" : "A button that stops recording voice input.",
-      "isCommentAutoGenerated" : true
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إيقاف التسجيل"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufnahme stoppen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detener grabación"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Остановить запись"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止录音"
+          }
+        }
+      }
     },
     "Stop speaking" : {
       "comment" : "A label for a button that stops speaking a translation.",
-      "isCommentAutoGenerated" : true
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إيقاف النطق"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sprechen stoppen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detener habla"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Остановить озвучивание"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止朗读"
+          }
+        }
+      }
     },
     "Swap languages" : {
       "comment" : "A button that swaps the source and target languages.",
-      "isCommentAutoGenerated" : true
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تبديل اللغات"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sprachen tauschen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intercambiar idiomas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поменять языки местами"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切换语言"
+          }
+        }
+      }
     },
     "System" : {
       "comment" : "A label indicating that a tag is a system tag, which cannot be deleted.",
@@ -2391,6 +3259,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sistema"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Система"
           }
         },
         "zh-Hans" : {
@@ -2423,6 +3297,12 @@
             "value" : "Etiqueta del sistema"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Системный тег"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2451,6 +3331,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Las etiquetas del sistema no se pueden eliminar. Las etiquetas se pueden crear automáticamente por IA o manualmente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Системные теги нельзя удалить. Теги можно создавать автоматически с помощью ИИ или вручную."
           }
         },
         "zh-Hans" : {
@@ -2483,6 +3369,12 @@
             "value" : "Nombre de la etiqueta"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Название тега"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2511,6 +3403,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Traducir"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перевод"
           }
         },
         "zh-Hans" : {
@@ -2543,6 +3441,12 @@
             "value" : "Traducción"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перевод"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2571,6 +3475,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Traducciones"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Переводы"
           }
         },
         "zh-Hans" : {
@@ -2603,6 +3513,12 @@
             "value" : "Quitar de favoritos"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Убрать из избранного"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2633,6 +3549,12 @@
             "value" : "Versión"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Версия"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2649,6 +3571,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "عرض التفاصيل"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Details anzeigen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ver detalles"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подробнее"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查看详情"
           }
         }
       }
@@ -2671,6 +3617,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tienes %lld idioma. Descarga al menos uno más para comenzar a traducir"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "У вас %lld язык. Скачайте ещё как минимум один, чтобы начать перевод"
           }
         },
         "zh-Hans" : {
@@ -2701,6 +3653,12 @@
             "value" : "Aún no has marcado ninguna traducción como favorita"
           }
         },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы ещё не добавили переводы в избранное"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2727,6 +3685,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tus traducciones guardadas aparecerán aquí"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохранённые переводы появятся здесь"
           }
         },
         "zh-Hans" : {

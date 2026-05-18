@@ -85,6 +85,7 @@ struct TranslationView: View {
     // Language persistence
     @AppStorage("preferredTargetLanguageCode") private var preferredTargetLanguageCode: String = ""
     @AppStorage("preferredSourceLanguageCode") private var preferredSourceLanguageCode: String = ""
+    @AppStorage("disabledLanguageCodes") private var disabledLanguageCodes: String = ""
 
     // Feature toggles
     @AppStorage("includeRomanization") private var includeRomanization: Bool = true
@@ -270,10 +271,23 @@ struct TranslationView: View {
 
                     // Fall back to first alphabetical installed language if nothing set
                     if activePriorityLanguage == nil && !installedLanguages.isEmpty {
-                        activePriorityLanguage = installedLanguages.sorted(by: { l1, l2 in
-                            (Locale.current.localizedString(forLanguageCode: l1.minimalIdentifier) ?? l1.minimalIdentifier) <
-                                (Locale.current.localizedString(forLanguageCode: l2.minimalIdentifier) ?? l2.minimalIdentifier)
-                        }).first
+                        activePriorityLanguage = firstAvailableTarget(excluding: selectedSourceLanguage)
+                    }
+                }
+                .onChange(of: disabledLanguageCodes) {
+                    Task {
+                        await loadInstalledLanguages()
+                        if !inputText.isEmpty {
+                            handleTextChange(inputText)
+                        }
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .supportedLanguagesDidChange)) { _ in
+                    Task {
+                        await loadInstalledLanguages()
+                        if !inputText.isEmpty {
+                            handleTextChange(inputText)
+                        }
                     }
                 }
                 .onChange(of: activePriorityLanguage) { _, newLang in
@@ -291,7 +305,9 @@ struct TranslationView: View {
             isPresented: $showDownloadSheet,
             onDismiss: { Task { await loadInstalledLanguages() } }
         ) {
-            LanguageDownloadView()
+            NavigationStack {
+                LanguageDownloadView()
+            }
         }
     }
 
@@ -487,6 +503,29 @@ struct TranslationView: View {
         inputText = newInput
         dismissInputFocus()
         if !inputText.isEmpty { handleTextChange(inputText) }
+    }
+
+    private func firstAvailableTarget(excluding sourceLanguage: Locale.Language?) -> Locale.Language? {
+        sortedInstalledLanguages.first { language in
+            language.minimalIdentifier != sourceLanguage?.minimalIdentifier
+        }
+    }
+
+    private func reconcileLanguageSelection() {
+        if let selectedSourceLanguage, !installedLanguages.contains(selectedSourceLanguage) {
+            self.selectedSourceLanguage = nil
+        }
+
+        if let currentSourceLanguage, !installedLanguages.contains(currentSourceLanguage) {
+            self.currentSourceLanguage = nil
+        }
+
+        let sourceLanguage = selectedSourceLanguage ?? currentSourceLanguage
+        if let activePriorityLanguage, !installedLanguages.contains(activePriorityLanguage) {
+            self.activePriorityLanguage = firstAvailableTarget(excluding: sourceLanguage)
+        } else if activePriorityLanguage == nil {
+            activePriorityLanguage = firstAvailableTarget(excluding: sourceLanguage)
+        }
     }
 
     // MARK: - Source Trailing Button
@@ -1015,7 +1054,12 @@ struct TranslationView: View {
 #endif
 
     private func loadInstalledLanguages() async {
-        installedLanguages = await service.installedLanguages()
+        let loadedLanguages = await service.installedLanguages()
+        installedLanguages = SupportedLanguages.enabledLanguages(
+            from: loadedLanguages,
+            disabledLanguageCodes: disabledLanguageCodes
+        )
+        reconcileLanguageSelection()
     }
 }
 
@@ -1124,7 +1168,7 @@ private final class KeyboardLanguageTextView: UITextView {
 #endif
 
 private func localizedLanguageName(for language: Locale.Language) -> String {
-    Locale.current.localizedString(forLanguageCode: language.minimalIdentifier) ?? language.minimalIdentifier
+    SupportedLanguages.displayName(for: language)
 }
 
 #Preview {

@@ -69,10 +69,7 @@ struct TranslationService {
         canonicalLanguageIdentifier(for: lhs) == canonicalLanguageIdentifier(for: rhs)
     }
 
-    func installedLanguages(
-        from languageInfos: [LanguageInfo] = SupportedLanguages.all,
-        referenceLanguage: Locale.Language = Locale.Language(identifier: "en")
-    ) async -> Set<Locale.Language> {
+    func installedLanguages(referenceLanguage: Locale.Language = Locale.Language(identifier: "en")) async -> Set<Locale.Language> {
         let supportedLanguages = await getSupportedLanguages()
         var installed: Set<Locale.Language> = []
 
@@ -80,9 +77,7 @@ struct TranslationService {
             installed.insert(canonicalLanguage(for: referenceLanguage))
         }
 
-        for languageInfo in languageInfos {
-            let language = languageInfo.language
-
+        for language in supportedLanguages {
             guard !isSameLanguage(referenceLanguage, language),
                   isLanguageSupported(language, in: supportedLanguages) else {
                 continue
@@ -128,6 +123,7 @@ struct TranslationService {
         for text: String,
         preferredLanguages: Set<Locale.Language>? = nil,
         installedLanguages: Set<Locale.Language>? = nil,
+        supportedLanguages: Set<Locale.Language>? = nil,
         maxResults: Int = 5
     ) -> [(language: Locale.Language, confidence: Double, isDownloaded: Bool)] {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -146,29 +142,28 @@ struct TranslationService {
             return []
         }
 
-        // Convert to supported languages list
-        let supportedLanguageIds = Set(SupportedLanguages.allLanguages.map { $0.minimalIdentifier })
-        let preferredLanguageIds = preferredLanguages.map { Set($0.map { $0.minimalIdentifier }) }
-        let installedLanguageIds = installedLanguages.map { Set($0.map { $0.minimalIdentifier }) }
+        let supportedLanguageIds = supportedLanguages.map { Set($0.map { canonicalLanguageIdentifier(for: $0) }) }
+        let preferredLanguageIds = preferredLanguages.map { Set($0.map { canonicalLanguageIdentifier(for: $0) }) }
+        let installedLanguageIds = installedLanguages.map { Set($0.map { canonicalLanguageIdentifier(for: $0) }) }
         
         var results: [(language: Locale.Language, confidence: Double, isDownloaded: Bool)] = []
         
         for (nlLanguage, confidence) in hypotheses {
             let localeLanguage = Locale.Language(identifier: nlLanguage.rawValue)
             let languageId = localeLanguage.minimalIdentifier
+            let canonicalLanguageId = canonicalLanguageIdentifier(for: localeLanguage)
             
-            // Only include supported languages
-            guard supportedLanguageIds.contains(languageId) else {
+            if let supportedLanguageIds, !supportedLanguageIds.contains(canonicalLanguageId) {
                 logger.debug("Filtering out unsupported language: \(languageId)")
                 continue
             }
             
             // Check if language is downloaded
-            let isDownloaded = installedLanguageIds?.contains(languageId) ?? true
+            let isDownloaded = installedLanguageIds?.contains(canonicalLanguageId) ?? true
             
             // Apply confidence boost for preferred languages
             var adjustedConfidence = confidence
-            if let preferredIds = preferredLanguageIds, preferredIds.contains(languageId) {
+            if let preferredIds = preferredLanguageIds, preferredIds.contains(canonicalLanguageId) {
                 adjustedConfidence = min(1.0, confidence + 0.2)
                 logger.debug("Boosting confidence for preferred language \(languageId): \(confidence) -> \(adjustedConfidence)")
             }
@@ -188,7 +183,7 @@ struct TranslationService {
     /// Detects the dominant language in the given text with confidence score
     /// - Parameter text: The text to analyze
     /// - Returns: The most likely language and its confidence score
-    /// - Note: This method is kept for backward compatibility. Use `detectLanguages(for:preferredLanguages:installedLanguages:)` for multi-language detection.
+    /// - Note: This method is kept for backward compatibility. Use `detectLanguages(for:preferredLanguages:installedLanguages:supportedLanguages:)` for multi-language detection.
     func detectLanguage(for text: String) -> (language: Locale.Language?, confidence: Double) {
         let results = detectLanguages(for: text, preferredLanguages: nil, installedLanguages: nil, maxResults: 1)
         return results.first.map { ($0.language, $0.confidence) } ?? (nil, 0.0)
@@ -363,9 +358,15 @@ struct TranslationService {
             return []
         }
 
+        let supportedLanguages = await getSupportedLanguages()
+
         // Detect source language if not provided
         let (detectedLanguage, confidence) = sourceLanguage == nil
-            ? detectLanguage(for: text)
+            ? detectLanguages(
+                for: text,
+                supportedLanguages: Set(supportedLanguages),
+                maxResults: 1
+            ).first.map { ($0.language, $0.confidence) } ?? (nil, 0.0)
             : (sourceLanguage, 1.0)
 
         guard let sourceLanguage = detectedLanguage else {
@@ -373,7 +374,6 @@ struct TranslationService {
             return []
         }
 
-        let supportedLanguages = await getSupportedLanguages()
         let validTargetLanguages = targetLanguages.filter {
             isValidPair(source: sourceLanguage, target: $0, supportedLanguages: supportedLanguages)
         }
@@ -555,7 +555,7 @@ struct TranslationService {
     }
 
     private func canonicalLanguageIdentifier(for language: Locale.Language) -> String {
-        canonicalLanguageIdentifier(language.minimalIdentifier)
+        canonicalLanguageIdentifier(SupportedLanguages.code(for: language))
     }
 
     private func canonicalLanguageIdentifier(_ identifier: String) -> String {

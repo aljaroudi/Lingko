@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var installedLanguages: Set<Locale.Language> = []
     @State private var isLoadingLanguages = true
     @State private var showDownloadSheet = false
+    @AppStorage("disabledLanguageCodes") private var disabledLanguageCodes: String = ""
 
     var body: some View {
         Group {
@@ -76,8 +77,16 @@ struct ContentView: View {
         .task {
             await loadInstalledLanguages()
         }
+        .onChange(of: disabledLanguageCodes) {
+            Task { await loadInstalledLanguages() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .supportedLanguagesDidChange)) { _ in
+            Task { await loadInstalledLanguages() }
+        }
         .sheet(isPresented: $showDownloadSheet, onDismiss: { Task { await loadInstalledLanguages() } }) {
-            LanguageDownloadView()
+            NavigationStack {
+                LanguageDownloadView()
+            }
         }
     }
 
@@ -102,7 +111,11 @@ struct ContentView: View {
 
     private func loadInstalledLanguages() async {
         let service = TranslationService()
-        installedLanguages = await service.installedLanguages()
+        let loadedLanguages = await service.installedLanguages()
+        installedLanguages = SupportedLanguages.enabledLanguages(
+            from: loadedLanguages,
+            disabledLanguageCodes: disabledLanguageCodes
+        )
         isLoadingLanguages = false
     }
 

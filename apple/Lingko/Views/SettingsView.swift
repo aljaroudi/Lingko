@@ -19,23 +19,16 @@ struct SettingsView: View {
     #elseif os(macOS)
     @AppStorage("launchAtLogin") private var launchAtLogin: Bool = false
     #endif
-    @State private var showDownloadSheet = false
 
     var body: some View {
         NavigationStack {
             Form {
                 // Language Management
                 Section {
-                    Button {
-                        showDownloadSheet = true
+                    NavigationLink {
+                        LanguageDownloadView(showsDoneButton: false)
                     } label: {
-                        HStack {
-                            Label("Download Languages", systemImage: "arrow.down.circle")
-                            Spacer()
-                            Image(systemName: "arrow.forward")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        Label("Languages", systemImage: "character.bubble")
                     }
                 } header: {
                     Text("Language Management")
@@ -48,12 +41,7 @@ struct SettingsView: View {
                     }
 
                     Toggle(isOn: $includeLinguisticAnalysis) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Label("Linguistic Analysis", systemImage: "brain")
-                            Text("Show parts of speech and named entities")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        Label("Linguistic Analysis", systemImage: "brain")
                     }
 
                     Toggle(isOn: $includeRomanization) {
@@ -168,9 +156,6 @@ struct SettingsView: View {
                     }
                 }
             }
-        }
-        .sheet(isPresented: $showDownloadSheet) {
-            LanguageDownloadView()
         }
     }
 
