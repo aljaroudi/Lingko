@@ -1,11 +1,17 @@
 package com.aljaroudi.lingko.ui.history
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aljaroudi.lingko.data.repository.AudioRepository
 import com.aljaroudi.lingko.data.repository.HistoryRepository
 import com.aljaroudi.lingko.data.repository.TagRepository
+import com.aljaroudi.lingko.domain.model.GroupedTranslationItem
 import com.aljaroudi.lingko.domain.model.Tag
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,7 +23,9 @@ import javax.inject.Inject
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
     private val historyRepository: HistoryRepository,
-    private val tagRepository: TagRepository
+    private val tagRepository: TagRepository,
+    private val audioRepository: AudioRepository,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HistoryUiState())
@@ -29,6 +37,11 @@ class HistoryViewModel @Inject constructor(
         loadHistory()
         loadTags()
         initializeDefaultTags()
+        viewModelScope.launch {
+            audioRepository.isSpeaking.collect { isSpeaking ->
+                if (!isSpeaking) _uiState.update { it.copy(speakingItemId = null) }
+            }
+        }
     }
     
     private fun initializeDefaultTags() {
@@ -108,6 +121,17 @@ class HistoryViewModel @Inject constructor(
         }
     }
     
+    fun speak(groupId: String, item: GroupedTranslationItem) {
+        val itemId = "$groupId:${item.targetLanguage.code}"
+        _uiState.update { it.copy(speakingItemId = itemId) }
+        audioRepository.speak(text = item.translatedText, language = item.targetLanguage, rate = 1.0f)
+    }
+
+    fun copyToClipboard(text: String) {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("Translation", text))
+    }
+
     fun updateTranslationTags(groupId: String, tags: List<Tag>) {
         viewModelScope.launch {
             tagRepository.setTagsForTranslation(groupId, tags.map { it.id })

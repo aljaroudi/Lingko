@@ -122,13 +122,6 @@ private struct TagSelectionRow: View {
     let isSelected: Bool
     let action: () -> Void
 
-    var chipColor: Color {
-        if let hex = tag.color {
-            return Color(hex: hex) ?? .blue
-        }
-        return .blue
-    }
-
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
@@ -136,9 +129,9 @@ private struct TagSelectionRow: View {
                 HStack(spacing: 8) {
                     Image(systemName: tag.icon)
                         .font(.title3)
-                        .foregroundStyle(chipColor)
+                        .foregroundStyle(tag.chipColor)
                         .frame(width: 32, height: 32)
-                        .background(chipColor.opacity(0.15))
+                        .background(tag.chipColor.opacity(0.15))
                         .clipShape(Circle())
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -161,7 +154,7 @@ private struct TagSelectionRow: View {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title3)
-                        .foregroundStyle(chipColor)
+                        .foregroundStyle(tag.chipColor)
                 } else {
                     Image(systemName: "circle")
                         .font(.title3)
@@ -172,11 +165,11 @@ private struct TagSelectionRow: View {
             .padding(.horizontal, 12)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? chipColor.opacity(0.1) : Color.platformSecondaryBackground)
+                    .fill(isSelected ? tag.chipColor.opacity(0.1) : Color.platformSecondaryBackground)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? chipColor : Color.clear, lineWidth: 1.5)
+                    .stroke(isSelected ? tag.chipColor : Color.clear, lineWidth: 1.5)
             )
         }
         .buttonStyle(.plain)

@@ -7,10 +7,6 @@
 
 import SwiftUI
 
-/// View for displaying AI-enhanced translation features
-///
-/// Shows example sentences, alternative translations, formality levels,
-/// cultural notes, and provides an interface to ask questions about translations.
 struct AIEnhancedView: View {
     let translation: TranslationResult
     let aiService: AIAssistantService
@@ -18,7 +14,6 @@ struct AIEnhancedView: View {
     @State private var isExamplesExpanded = false
     @State private var isAlternativesExpanded = false
     @State private var isCulturalNotesExpanded = false
-    @State private var showQuestionDialog = false
 
     @State private var isLoadingExamples = false
     @State private var isLoadingAlternatives = false
@@ -27,38 +22,26 @@ struct AIEnhancedView: View {
     @State private var exampleSentences: [String] = []
     @State private var alternatives: [Alternative] = []
     @State private var culturalNotes: String?
-    @State private var question = ""
-    @State private var answer: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Formality Level Indicator
             if let formality = translation.formalityLevel {
                 formalityIndicator(formality)
             }
 
-            // Example Sentences
             if aiService.isAvailable {
                 examplesSection
             }
 
-            // Alternative Translations
             if aiService.isAvailable {
                 alternativesSection
             }
 
-            // Cultural Notes
             if aiService.isAvailable {
                 culturalNotesSection
             }
-
-            // Ask About Translation
-//            if aiService.isAvailable {
-//                askQuestionButton
-//            }
         }
         .onChange(of: translation.id) { _, _ in
-            // Reset all AI state when translation changes
             exampleSentences = []
             alternatives = []
             culturalNotes = nil
@@ -249,79 +232,6 @@ struct AIEnhancedView: View {
         }
     }
 
-    // MARK: - Ask Question Button
-
-    @ViewBuilder
-    private var askQuestionButton: some View {
-        Button {
-            showQuestionDialog = true
-        } label: {
-            Label("Ask About This Translation", systemImage: "questionmark.bubble")
-                .font(.caption)
-                .fontWeight(.medium)
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .sheet(isPresented: $showQuestionDialog) {
-            questionDialog
-        }
-    }
-
-    @ViewBuilder
-    private var questionDialog: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Ask about: \"\(translation.translation)\"")
-                    .font(.headline)
-                    .padding(.bottom, 8)
-
-                TextField("Enter your question", text: $question, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .lineLimit(3...6)
-
-                Button {
-                    Task {
-                        await askQuestion()
-                    }
-                } label: {
-                    Label("Ask", systemImage: "paperplane")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(question.isEmpty)
-
-                if let answer = answer {
-                    Divider()
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Answer", systemImage: "lightbulb")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-
-                        Text(answer)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Spacer()
-            }
-            .padding()
-            .navigationTitle("Ask a Question")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
-                        showQuestionDialog = false
-                        question = ""
-                        answer = nil
-                    }
-                }
-            }
-        }
-    }
-
     // MARK: - Actions
 
     private func loadExamples() async {
@@ -352,15 +262,6 @@ struct AIEnhancedView: View {
         isLoadingCulturalNotes = false
     }
 
-    private func askQuestion() async {
-        guard !question.isEmpty else { return }
-
-        answer = await aiService.askAboutTranslation(
-            question: question,
-            translation: translation.translation,
-            language: translation.language
-        )
-    }
 }
 
 #Preview {

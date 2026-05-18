@@ -9,37 +9,38 @@ import SwiftUI
 import SwiftData
 #if os(iOS)
 import PhotosUI
+import UIKit
 #elseif os(macOS)
 import UniformTypeIdentifiers
 #endif
 import Translation
 
 struct TranslationView: View {
+    private struct PendingAutosaveSnapshot {
+        let requestID: UUID
+        let sourceText: String
+        let results: [TranslationResult]
+        let fingerprint: String
+    }
+
     @Environment(\.modelContext) private var modelContext
 
     @State private var service = TranslationService()
-    @State private var audioService = AudioService()
     @State private var aiService = AIAssistantService()
     @State private var historyService = HistoryService()
     @State private var tagService = TagService()
     @Binding var inputText: String
     @State private var translations: [TranslationResult] = []
     @State private var activePriorityLanguage: Locale.Language?
-    @State private var isTranslating = false
     @State private var loadingLanguages: Set<Locale.Language> = []
     @State private var showImageTranslation = false
     @State private var showSettings = false
-    #if os(iOS)
+#if os(iOS)
     @State private var selectedPhotoItem: PhotosPickerItem?
-    #elseif os(macOS)
+#elseif os(macOS)
     @State private var showImagePicker = false
-    #endif
+#endif
     @State private var selectedImage: PlatformImage?
-
-    // Computed property - auto-use all installed languages
-    private var selectedLanguages: Set<Locale.Language> {
-        installedLanguages
-    }
 
     // Computed binding that only shows sheet when image is available
     private var showImageTranslationBinding: Binding<Bool> {
@@ -50,16 +51,14 @@ struct TranslationView: View {
                 if !newValue {
                     // Clear image when sheet is dismissed
                     selectedImage = nil
-                    #if os(iOS)
+#if os(iOS)
                     selectedPhotoItem = nil
-                    #endif
+#endif
                 }
             }
         )
     }
     @State private var debounceTask: Task<Void, Never>?
-    @State private var detectedLanguage: String?
-    @State private var detectedLanguages: [(language: Locale.Language, confidence: Double, isDownloaded: Bool)] = []
     @State private var selectedSourceLanguage: Locale.Language? = nil
     @State private var currentSourceLanguage: Locale.Language? = nil
     @State private var installedLanguages: Set<Locale.Language> = []
@@ -67,14 +66,36 @@ struct TranslationView: View {
     @State private var errorMessage: ErrorMessage?
     @State private var errorTrigger = UUID()
     @State private var showDownloadSheet = false
+    @State private var pendingAutosaveSnapshot: PendingAutosaveSnapshot?
+    @State private var pendingAutosaveIsDirty = false
+    @State private var lastCommittedAutosaveFingerprint: String?
+    @State private var isCommittingAutosave = false
+    @State private var latestTranslationRequestID = UUID()
+    @State private var inputDismissedForCurrentRequest = true
     @FocusState private var isInputFocused: Bool
-    @AppStorage("defaultSpeechRate") private var speechRate: Double = 0.5
+
+    @State private var audioService = AudioService()
+    @State private var speechService = SpeechService()
+    @State private var currentSavedTranslation: SavedTranslation?
+    @State private var isSpeakingSource = false
+    @State private var isSpeakingTranslation = false
+    @State private var showCopyConfirmation = false
+    @AppStorage("defaultSpeechRate") private var defaultSpeechRate: Double = 0.5
+
+    // Language persistence
+    @AppStorage("preferredTargetLanguageCode") private var preferredTargetLanguageCode: String = ""
+    @AppStorage("preferredSourceLanguageCode") private var preferredSourceLanguageCode: String = ""
+    @AppStorage("disabledLanguageCodes") private var disabledLanguageCodes: String = ""
 
     // Feature toggles
     @AppStorage("includeRomanization") private var includeRomanization: Bool = true
     @AppStorage("autoSaveToHistory") private var autoSaveToHistory: Bool = true
 
     private let debounceDelay: Duration = .milliseconds(300)
+
+    private var sourceInputLanguage: Locale.Language? {
+        selectedSourceLanguage ?? currentSourceLanguage
+    }
 
     init(initialText: Binding<String>) {
         _inputText = initialText
@@ -84,14 +105,15 @@ struct TranslationView: View {
         NavigationStack {
             mainContent
                 .navigationTitle("Lingko")
-                #if os(iOS)
+#if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
-                #endif
+#endif
                 .errorBanner($errorMessage, onRetry: retryLastTranslation)
                 .toolbar {
-                    #if os(iOS)
+#if os(iOS)
                     ToolbarItem(placement: .navigationBarLeading) {
                         Button {
+                            dismissInputFocus()
                             showSettings = true
                         } label: {
                             Image(systemName: "gear")
@@ -107,18 +129,16 @@ struct TranslationView: View {
                         ) {
                             Label("Image Translation", systemImage: "photo")
                         }
+                        .simultaneousGesture(
+                            TapGesture().onEnded {
+                                dismissInputFocus()
+                            }
+                        )
                     }
-
-                    ToolbarItem(placement: .keyboard) {
-                        Button {
-                            isInputFocused = false
-                        } label: {
-                            Image(systemName: "keyboard.chevron.compact.down")
-                        }
-                    }
-                    #elseif os(macOS)
+#elseif os(macOS)
                     ToolbarItem(placement: .automatic) {
                         Button {
+                            dismissInputFocus()
                             showSettings = true
                         } label: {
                             Image(systemName: "gear")
@@ -129,12 +149,13 @@ struct TranslationView: View {
 
                     ToolbarItemGroup(placement: .automatic) {
                         Button {
+                            dismissInputFocus()
                             showImagePicker = true
                         } label: {
                             Label("Import Image", systemImage: "photo")
                         }
                     }
-                    #endif
+#endif
                 }
                 .sheet(isPresented: $showSettings, onDismiss: { Task { await loadInstalledLanguages() } }) {
                     SettingsView()
@@ -144,7 +165,7 @@ struct TranslationView: View {
                     if let image = selectedImage {
                         CameraTranslationView(
                             initialImage: image,
-                            selectedLanguages: selectedLanguages,
+                            selectedLanguages: installedLanguages,
                             autoSaveToHistory: autoSaveToHistory,
                             historyService: historyService,
                             aiService: aiService,
@@ -156,7 +177,7 @@ struct TranslationView: View {
                         EmptyView()
                     }
                 }
-                #if os(macOS)
+#if os(macOS)
                 .fileImporter(
                     isPresented: $showImagePicker,
                     allowedContentTypes: [.image],
@@ -173,7 +194,7 @@ struct TranslationView: View {
                     handleDrop(providers: providers)
                     return true
                 }
-                #endif
+#endif
                 .onChange(of: selectedSourceLanguage) { _, newLanguage in
                     // Update current source language when manually selected
                     if let newLanguage = newLanguage {
@@ -181,18 +202,22 @@ struct TranslationView: View {
 
                         // If active priority language is same as new source, switch to another
                         if activePriorityLanguage == newLanguage {
-                            let availableTargets = selectedLanguages.filter { $0 != newLanguage }
+                            let availableTargets = installedLanguages.filter { $0 != newLanguage }
                             activePriorityLanguage = availableTargets.sorted(by: { l1, l2 in
                                 (Locale.current.localizedString(forLanguageCode: l1.minimalIdentifier) ?? l1.minimalIdentifier) <
-                                (Locale.current.localizedString(forLanguageCode: l2.minimalIdentifier) ?? l2.minimalIdentifier)
+                                    (Locale.current.localizedString(forLanguageCode: l2.minimalIdentifier) ?? l2.minimalIdentifier)
                             }).first
+                        }
+
+                        if !inputText.isEmpty {
+                            handleTextChange(inputText)
                         }
                     } else if !inputText.isEmpty {
                         // If auto-detect is selected, trigger translation to recalculate
                         handleTextChange(inputText)
                     }
                 }
-                #if os(iOS)
+#if os(iOS)
                 .onChange(of: selectedPhotoItem) { oldItem, newItem in
                     // Clear state when picker is dismissed without selection
                     if newItem == nil {
@@ -209,50 +234,92 @@ struct TranslationView: View {
                         await loadImage(from: newItem)
                     }
                 }
-                #endif
+#endif
+                .onChange(of: isInputFocused) { oldValue, newValue in
+                    guard oldValue, !newValue else { return }
+                    if speechService.isRecording { speechService.stopRecording() }
+                    inputDismissedForCurrentRequest = true
+                    Task {
+                        await commitPendingAutosaveIfNeeded()
+                    }
+                }
+                .onChange(of: speechService.transcript) { _, newValue in
+                    guard speechService.isRecording else { return }
+                    inputText = newValue
+                }
                 .onDisappear {
-                    audioService.stop()
+                    dismissInputFocus()
+
+                    Task {
+                        await commitPendingAutosaveIfNeeded()
+                    }
                 }
                 .task {
                     await loadInstalledLanguages()
 
-                    // Initialize active priority language on first load
-                    if activePriorityLanguage == nil && !selectedLanguages.isEmpty {
-                        activePriorityLanguage = selectedLanguages.sorted(by: { l1, l2 in
-                            (Locale.current.localizedString(forLanguageCode: l1.minimalIdentifier) ?? l1.minimalIdentifier) <
-                            (Locale.current.localizedString(forLanguageCode: l2.minimalIdentifier) ?? l2.minimalIdentifier)
-                        }).first
+                    // Restore saved target language if still installed
+                    if !preferredTargetLanguageCode.isEmpty {
+                        let saved = Locale.Language(identifier: preferredTargetLanguageCode)
+                        if installedLanguages.contains(saved) {
+                            activePriorityLanguage = saved
+                        }
+                    }
+                    // Restore saved source language override (empty = auto)
+                    if !preferredSourceLanguageCode.isEmpty {
+                        selectedSourceLanguage = Locale.Language(identifier: preferredSourceLanguageCode)
+                    }
+
+                    // Fall back to first alphabetical installed language if nothing set
+                    if activePriorityLanguage == nil && !installedLanguages.isEmpty {
+                        activePriorityLanguage = firstAvailableTarget(excluding: selectedSourceLanguage)
                     }
                 }
-                #if os(iOS)
+                .onChange(of: disabledLanguageCodes) {
+                    Task {
+                        await loadInstalledLanguages()
+                        if !inputText.isEmpty {
+                            handleTextChange(inputText)
+                        }
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .supportedLanguagesDidChange)) { _ in
+                    Task {
+                        await loadInstalledLanguages()
+                        if !inputText.isEmpty {
+                            handleTextChange(inputText)
+                        }
+                    }
+                }
+                .onChange(of: activePriorityLanguage) { _, newLang in
+                    preferredTargetLanguageCode = newLang?.minimalIdentifier ?? ""
+                }
+                .onChange(of: selectedSourceLanguage) { _, newLang in
+                    preferredSourceLanguageCode = newLang?.minimalIdentifier ?? ""
+                }
+#if os(iOS)
                 .sensoryFeedback(.impact(weight: .light), trigger: translations.count)
                 .sensoryFeedback(.error, trigger: errorTrigger)
-                #endif
+#endif
         }
         .sheet(
             isPresented: $showDownloadSheet,
             onDismiss: { Task { await loadInstalledLanguages() } }
         ) {
-            LanguageDownloadView()
+            NavigationStack {
+                LanguageDownloadView()
+            }
         }
     }
-    
+
     @ViewBuilder
     private var mainContent: some View {
         VStack(spacing: 0) {
-            // Input section
             inputSection
-
-            Divider()
-
-            // Language selector section (only show if languages are selected and text is not empty)
-            if !selectedLanguages.isEmpty && !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                languageSelectorSection
-                Divider()
-            }
-
-            // Results section
-            resultsSection
+            Spacer(minLength: 0)
+                .contentShape(Rectangle())
+                .simultaneousGesture(
+                    TapGesture().onEnded { dismissInputFocus() }
+                )
         }
     }
 
@@ -260,137 +327,378 @@ struct TranslationView: View {
 
     @ViewBuilder
     private var inputSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Source language chip selector
-            SourceLanguageChipRow(
-                availableLanguages: Array(selectedLanguages).sorted(by: { l1, l2 in
-                    (Locale.current.localizedString(forLanguageCode: l1.minimalIdentifier) ?? l1.minimalIdentifier) <
-                    (Locale.current.localizedString(forLanguageCode: l2.minimalIdentifier) ?? l2.minimalIdentifier)
-                }),
-                selectedLanguage: selectedSourceLanguage,
-                onLanguageSelected: { language in
-                    selectedSourceLanguage = language
-                },
-                onAutoSelected: {
-                    selectedSourceLanguage = nil
-                    if !inputText.isEmpty {
-                        handleTextChange(inputText)
+        VStack(spacing: 0) {
+            // Source panel
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Menu {
+                        Button("Auto") {
+                            dismissInputFocus()
+                            selectedSourceLanguage = nil
+                            if !inputText.isEmpty { handleTextChange(inputText) }
+                        }
+                        ForEach(
+                            sortedInstalledLanguages.filter { $0.minimalIdentifier != activePriorityLanguage?.minimalIdentifier },
+                            id: \.minimalIdentifier
+                        ) { lang in
+                            Button(localizedLanguageName(for: lang)) {
+                                dismissInputFocus()
+                                selectedSourceLanguage = lang
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(sourceLanguageLabel)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption2)
+                        }
+                        .foregroundStyle(.primary)
                     }
+                    Spacer()
+                    sourceTrailingButton
                 }
-            )
 
-            ZStack(alignment: .topLeading) {
-                TextEditor(text: $inputText)
-                    .frame(minHeight: 100, maxHeight: 200)
+                ZStack(alignment: .topLeading) {
+#if os(iOS)
+                    LanguageAwareTextEditor(
+                        text: $inputText,
+                        inputLanguage: sourceInputLanguage,
+                        isFocused: $isInputFocused
+                    )
+                    .frame(minHeight: 80, maxHeight: 200)
                     .background(Color.platformBackground)
-                    .focused($isInputFocused)
-                    .onChange(of: inputText) { _, newValue in
-                        handleTextChange(newValue)
+#elseif os(macOS)
+                    TextEditor(text: $inputText)
+                        .frame(minHeight: 80, maxHeight: 200)
+                        .background(Color.platformBackground)
+                        .focused($isInputFocused)
+#endif
+                    if inputText.isEmpty {
+                        Text("Enter text")
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 8)
+                            .allowsHitTesting(false)
                     }
-
-                if inputText.isEmpty {
-                    Text("Enter text")
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 8)
-                        .allowsHitTesting(false)
                 }
-            }
+                .onChange(of: inputText) { _, newValue in
+                    inputDismissedForCurrentRequest = !isInputFocused
+                    handleTextChange(newValue)
+                }
 
-            // Source romanization
-            if let romanization = sourceRomanization {
-                HStack(spacing: 6) {
-                    Image(systemName: "textformat.abc")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
+                if let romanization = sourceRomanization {
                     Text(romanization)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .italic()
                         .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-        }
-        .padding()
-    }
+            .padding()
 
-    // MARK: - Language Selector Section
+            // Swap divider
+            ZStack {
+                Divider()
+                Button(action: swapLanguages) {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(.caption)
+                        .padding(8)
+                        .background(Color(.secondarySystemFill))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Swap languages")
+            }
 
-    @ViewBuilder
-    private var languageSelectorSection: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                // Filter out source language from target languages
-                let targetLanguages = selectedLanguages.filter { $0 != currentSourceLanguage }
-
-                ForEach(Array(targetLanguages).sorted(by: { l1, l2 in
-                    (Locale.current.localizedString(forLanguageCode: l1.minimalIdentifier) ?? l1.minimalIdentifier) <
-                    (Locale.current.localizedString(forLanguageCode: l2.minimalIdentifier) ?? l2.minimalIdentifier)
-                }), id: \.minimalIdentifier) { language in
-                    let isActive = activePriorityLanguage?.minimalIdentifier == language.minimalIdentifier
-                    let languageName = Locale.current.localizedString(forLanguageCode: language.minimalIdentifier) ?? language.minimalIdentifier
-
-                    Button {
-                        // Set this language as the active priority language
-                        activePriorityLanguage = language
+            // Target panel
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Menu {
+                        let sourceLangID = selectedSourceLanguage?.minimalIdentifier ?? currentSourceLanguage?.minimalIdentifier ?? ""
+                        ForEach(
+                            sortedInstalledLanguages.filter { $0.minimalIdentifier != sourceLangID },
+                            id: \.minimalIdentifier
+                        ) { lang in
+                            Button(localizedLanguageName(for: lang)) {
+                                dismissInputFocus()
+                                activePriorityLanguage = lang
+                                if !inputText.isEmpty { handleTextChange(inputText) }
+                            }
+                        }
                     } label: {
-                        Text(languageName)
-                            .font(.subheadline)
-                            .fontWeight(isActive ? .semibold : .regular)
-                            .foregroundStyle(isActive ? .white : .primary)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(isActive ? Color.accentColor : Color(.secondarySystemFill))
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 12)
-        }
-        .background(Color.platformGroupedBackground)
-    }
-
-    // MARK: - Results Section
-
-    @ViewBuilder
-    private var resultsSection: some View {
-        if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            EmptyStateView(configuration: .translationEmpty)
-                .transition(.opacity)
-        } else {
-            ScrollView {
-                LazyVStack(spacing: 16) {
-                    // Show only the active priority language's translation
-                    if let activeLanguage = activePriorityLanguage {
-                        if let activeTranslation = translations.first(where: { $0.language == activeLanguage }) {
-                            TranslationResultRow(
-                                result: activeTranslation,
-                                audioService: audioService,
-                                aiService: aiService,
-                                speechRate: Float(speechRate)
-                            )
-                            .transition(.asymmetric(
-                                insertion: .scale(scale: 0.9).combined(with: .opacity),
-                                removal: .opacity
-                            ))
-                        } else if loadingLanguages.contains(activeLanguage) {
-                            // Show skeleton loader for active language being translated
-                            SkeletonCard()
-                                .transition(.asymmetric(
-                                    insertion: .scale(scale: 0.9).combined(with: .opacity),
-                                    removal: .opacity
-                                ))
+                        HStack(spacing: 4) {
+                            Text(targetLanguageLabel)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.accent)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption2)
+                                .foregroundStyle(.accent)
                         }
                     }
+                    Spacer()
                 }
-                .padding()
+
+                Group {
+                    if let translation = activeTranslation {
+                        Text(translation.translation)
+                            .font(.title3)
+                            .foregroundStyle(.accent)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: translation.layoutDirection == .rightToLeft ? .trailing : .leading)
+                            .environment(\.layoutDirection, translation.layoutDirection)
+                            .transition(.opacity)
+                    } else if let lang = activePriorityLanguage, loadingLanguages.contains(lang) {
+                        ProgressView()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .frame(minHeight: 60, alignment: .topLeading)
+
+                if !isInputFocused, let translation = activeTranslation {
+                    translationCard(for: translation)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
-            .scrollDismissesKeyboard(.interactively)
-            .background(Color.platformGroupedBackground)
+            .padding()
+            .animation(.easeInOut(duration: 0.2), value: isInputFocused)
+            .contentShape(Rectangle())
+            .simultaneousGesture(
+                TapGesture().onEnded { dismissInputFocus() }
+            )
         }
+    }
+
+    // MARK: - Input Helpers
+
+    private var sortedInstalledLanguages: [Locale.Language] {
+        installedLanguages.sorted { localizedLanguageName(for: $0) < localizedLanguageName(for: $1) }
+    }
+
+    private var activeTranslation: TranslationResult? {
+        guard let lang = activePriorityLanguage else { return nil }
+        return translations.first { $0.language == lang }
+    }
+
+    private var sourceLanguageLabel: String {
+        if let lang = selectedSourceLanguage { return localizedLanguageName(for: lang) }
+        if let detected = currentSourceLanguage { return localizedLanguageName(for: detected) }
+        return String(localized: "Auto")
+    }
+
+    private var targetLanguageLabel: String {
+        if let lang = activePriorityLanguage { return localizedLanguageName(for: lang) }
+        return sortedInstalledLanguages.first.map { localizedLanguageName(for: $0) } ?? String(localized: "Select language")
+    }
+
+    private func swapLanguages() {
+        let newSource = activePriorityLanguage
+        let newTarget = currentSourceLanguage
+        let newInput = activeTranslation?.translation ?? inputText
+        selectedSourceLanguage = newSource
+        activePriorityLanguage = newTarget
+        inputText = newInput
+        dismissInputFocus()
+        if !inputText.isEmpty { handleTextChange(inputText) }
+    }
+
+    private func firstAvailableTarget(excluding sourceLanguage: Locale.Language?) -> Locale.Language? {
+        sortedInstalledLanguages.first { language in
+            language.minimalIdentifier != sourceLanguage?.minimalIdentifier
+        }
+    }
+
+    private func reconcileLanguageSelection() {
+        if let selectedSourceLanguage, !installedLanguages.contains(selectedSourceLanguage) {
+            self.selectedSourceLanguage = nil
+        }
+
+        if let currentSourceLanguage, !installedLanguages.contains(currentSourceLanguage) {
+            self.currentSourceLanguage = nil
+        }
+
+        let sourceLanguage = selectedSourceLanguage ?? currentSourceLanguage
+        if let activePriorityLanguage, !installedLanguages.contains(activePriorityLanguage) {
+            self.activePriorityLanguage = firstAvailableTarget(excluding: sourceLanguage)
+        } else if activePriorityLanguage == nil {
+            activePriorityLanguage = firstAvailableTarget(excluding: sourceLanguage)
+        }
+    }
+
+    // MARK: - Source Trailing Button
+
+    @ViewBuilder
+    private var sourceTrailingButton: some View {
+        if isInputFocused {
+            Button(action: toggleRecording) {
+                Image(systemName: speechService.isRecording ? "mic.fill" : "mic")
+                    .foregroundStyle(speechService.isRecording ? Color.red : Color.secondary)
+                    .symbolEffect(.pulse, isActive: speechService.isRecording)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(speechService.isRecording ? "Stop recording" : "Start voice input")
+        } else if !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            Button(action: toggleSourceSpeech) {
+                Image(systemName: isSpeakingSource ? "stop.circle.fill" : "speaker.wave.2")
+                    .foregroundStyle(Color.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isSpeakingSource ? "Stop speaking" : "Speak source text")
+        }
+    }
+
+    // MARK: - Translation Card
+
+    @ViewBuilder
+    private func translationCard(for translation: TranslationResult) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let romanization = translation.romanization {
+                Text(romanization)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .italic()
+                    .textSelection(.enabled)
+            }
+            HStack(spacing: 20) {
+                Button(action: { toggleTranslationSpeech(translation) }) {
+                    Image(systemName: isSpeakingTranslation ? "stop.circle.fill" : "speaker.wave.2")
+                        .foregroundStyle(.accent)
+                }
+                .accessibilityLabel(isSpeakingTranslation ? "Stop speaking" : "Speak translation")
+
+                Button(action: toggleFavorite) {
+                    Image(systemName: (currentSavedTranslation?.isFavorite ?? false) ? "star.fill" : "star")
+                        .foregroundStyle((currentSavedTranslation?.isFavorite ?? false) ? Color.yellow : Color.accentColor)
+                }
+                .accessibilityLabel((currentSavedTranslation?.isFavorite ?? false) ? "Remove from favorites" : "Add to favorites")
+
+                Button(action: { copyTranslation(translation) }) {
+                    Image(systemName: showCopyConfirmation ? "checkmark" : "doc.on.doc")
+                        .foregroundStyle(.accent)
+                }
+                .accessibilityLabel(showCopyConfirmation ? "Copied" : "Copy translation")
+
+                Spacer(minLength: 0)
+            }
+            .buttonStyle(.plain)
+            .font(.title3)
+        }
+        .padding(.top, 4)
+    }
+
+    // MARK: - STT Actions
+
+    private func toggleRecording() {
+        if speechService.isRecording {
+            speechService.stopRecording()
+        } else {
+            Task {
+                let ok = await speechService.requestPermissions()
+                guard ok else {
+                    errorMessage = ErrorMessage(
+                        title: "Permission needed",
+                        message: speechService.lastError ?? "Microphone or speech recognition permission denied. Enable in Settings.",
+                        severity: .warning
+                    )
+                    errorTrigger = UUID()
+                    return
+                }
+                do {
+                    try speechService.startRecording(locale: sttLocale())
+                } catch {
+                    errorMessage = ErrorMessage.from(error)
+                    errorTrigger = UUID()
+                }
+            }
+        }
+    }
+
+    private func sttLocale() -> Locale {
+        let lang = selectedSourceLanguage ?? currentSourceLanguage
+        if let lang { return Locale(identifier: lang.minimalIdentifier) }
+        return .current
+    }
+
+    // MARK: - TTS Actions
+
+    private func toggleSourceSpeech() {
+        if isSpeakingSource {
+            audioService.stop()
+            isSpeakingSource = false
+            return
+        }
+        let lang = currentSourceLanguage ?? selectedSourceLanguage ?? Locale.Language(identifier: Locale.current.identifier)
+        audioService.speak(text: inputText, language: lang, rate: Float(defaultSpeechRate))
+        isSpeakingSource = true
+        monitorSpeech(isActive: { isSpeakingSource }, clear: { isSpeakingSource = false })
+    }
+
+    private func toggleTranslationSpeech(_ translation: TranslationResult) {
+        if isSpeakingTranslation {
+            audioService.stop()
+            isSpeakingTranslation = false
+            return
+        }
+        audioService.speak(text: translation.translation, language: translation.language, rate: Float(defaultSpeechRate))
+        isSpeakingTranslation = true
+        monitorSpeech(isActive: { isSpeakingTranslation }, clear: { isSpeakingTranslation = false })
+    }
+
+    private func monitorSpeech(isActive: @escaping () -> Bool, clear: @escaping () -> Void) {
+        Task {
+            try? await Task.sleep(for: .milliseconds(100))
+            while isActive() && audioService.isPlaying {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            if isActive() && !audioService.isPlaying { clear() }
+        }
+    }
+
+    // MARK: - Card Actions
+
+    private func copyTranslation(_ translation: TranslationResult) {
+        PlatformUtils.copyToPasteboard(translation.translation)
+        withAnimation { showCopyConfirmation = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            withAnimation { showCopyConfirmation = false }
+        }
+    }
+
+    private func toggleFavorite() {
+        Task {
+            if let existing = currentSavedTranslation {
+                historyService.toggleFavorite(existing, context: modelContext)
+                return
+            }
+            guard let snapshot = pendingAutosaveSnapshot ?? makeFallbackSnapshot() else { return }
+            if let saved = await historyService.saveTranslations(
+                snapshot.results,
+                sourceText: snapshot.sourceText,
+                context: modelContext,
+                aiService: aiService,
+                tagService: tagService
+            ) {
+                currentSavedTranslation = saved
+                if !saved.isFavorite {
+                    historyService.toggleFavorite(saved, context: modelContext)
+                }
+                lastCommittedAutosaveFingerprint = snapshot.fingerprint
+                pendingAutosaveIsDirty = false
+            }
+        }
+    }
+
+    private func makeFallbackSnapshot() -> PendingAutosaveSnapshot? {
+        guard !translations.isEmpty, !inputText.isEmpty else { return nil }
+        return PendingAutosaveSnapshot(
+            requestID: latestTranslationRequestID,
+            sourceText: inputText,
+            results: translations,
+            fingerprint: makeAutosaveFingerprint(sourceText: inputText, results: translations)
+        )
     }
 
     // MARK: - Translation Logic
@@ -399,16 +707,18 @@ struct TranslationView: View {
         // Cancel previous debounce task
         debounceTask?.cancel()
 
+        let requestID = UUID()
+        latestTranslationRequestID = requestID
+
         // Clear translations if text is empty
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             translations = []
-            detectedLanguage = nil
-            detectedLanguages = []
-            selectedSourceLanguage = nil
-            currentSourceLanguage = nil
+            currentSourceLanguage = selectedSourceLanguage
             sourceRomanization = nil
-            isTranslating = false
             loadingLanguages = []
+            currentSavedTranslation = nil
+            clearPendingAutosave(resetLastCommitted: true)
+            inputDismissedForCurrentRequest = true
             return
         }
 
@@ -420,63 +730,50 @@ struct TranslationView: View {
                 // Check if task was cancelled
                 guard !Task.isCancelled else { return }
 
-                await performTranslation(text: text)
+                await performTranslation(text: text, requestID: requestID)
             } catch {
                 // Task was cancelled or sleep failed
             }
         }
     }
 
-    private func performTranslation(text: String) async {
-        isTranslating = true
+    private func performTranslation(text: String, requestID: UUID) async {
+        guard requestID == latestTranslationRequestID else { return }
+
         errorMessage = nil
+        sourceRomanization = nil
 
         do {
-            // Detect languages with preference for user-selected languages
-            let detected = service.detectLanguages(
-                for: text,
-                preferredLanguages: selectedLanguages,
-                installedLanguages: installedLanguages,
-                maxResults: 5
-            )
-            detectedLanguages = detected
-            
             // Determine source language with priority:
             // 1. Manual override (if set)
             // 2. Highest confidence language that's user-selected (doesn't need to be downloaded)
             // 3. Highest confidence detected language
             // Note: Source language doesn't need to be downloaded, only target languages do
-            let sourceLanguage: Locale.Language?
+            let sourceLanguage: Locale.Language
             if let manual = selectedSourceLanguage {
                 sourceLanguage = manual
             } else {
+                // Detect languages with preference for user-selected languages
+                let detected = service.detectLanguages(
+                    for: text,
+                    preferredLanguages: installedLanguages,
+                    installedLanguages: installedLanguages,
+                    maxResults: 5
+                )
+
                 // Find best language that's also user-selected
                 let detectedAndSelected = detected.first { result in
-                    selectedLanguages.contains(result.language)
+                    installedLanguages.contains(result.language)
                 }
-                
+
                 if let best = detectedAndSelected {
                     sourceLanguage = best.language
-                } else {
+                } else if let best = detected.first {
                     // Fallback to any detected language
-                    sourceLanguage = detected.first?.language
+                    sourceLanguage = best.language
+                } else {
+                    throw TranslationError.detectionFailed
                 }
-            }
-            
-            // Update display for primary detected language
-            if let primary = detected.first {
-                detectedLanguage = Locale.current.localizedString(forLanguageCode: primary.language.minimalIdentifier)
-                    ?? primary.language.minimalIdentifier
-            }
-
-            // Check if languages are selected
-            guard !selectedLanguages.isEmpty else {
-                throw TranslationError.invalidConfiguration
-            }
-            
-            // Check if we have a valid source language
-            guard let sourceLanguage = sourceLanguage else {
-                throw TranslationError.detectionFailed
             }
 
             // Update current source language for UI display
@@ -484,77 +781,61 @@ struct TranslationView: View {
 
             // If active priority language is same as source, switch to another available target
             if activePriorityLanguage == sourceLanguage {
-                let availableTargets = selectedLanguages.filter { $0 != sourceLanguage && installedLanguages.contains($0) }
+                let availableTargets = installedLanguages.filter { $0 != sourceLanguage }
                 activePriorityLanguage = availableTargets.sorted(by: { l1, l2 in
                     (Locale.current.localizedString(forLanguageCode: l1.minimalIdentifier) ?? l1.minimalIdentifier) <
-                    (Locale.current.localizedString(forLanguageCode: l2.minimalIdentifier) ?? l2.minimalIdentifier)
+                        (Locale.current.localizedString(forLanguageCode: l2.minimalIdentifier) ?? l2.minimalIdentifier)
                 }).first
             }
 
-            // Filter target languages to only downloaded ones
-            let downloadedTargetLanguages = selectedLanguages.filter { installedLanguages.contains($0) }
-
-            guard !downloadedTargetLanguages.isEmpty else {
-                // Collect missing language names
-                let missingLanguages = selectedLanguages.compactMap { language in
-                    Locale.current.localizedString(forLanguageCode: language.minimalIdentifier)
-                }
-                throw TranslationError.missingLanguagePacks(missingLanguages)
+            // Translate only to the selected target language
+            guard let targetLanguage = activePriorityLanguage else {
+                throw TranslationError.invalidConfiguration
             }
 
-            // Set loading state for all target languages (excluding source)
-            loadingLanguages = downloadedTargetLanguages.filter { $0 != sourceLanguage }
+            guard installedLanguages.contains(targetLanguage) else {
+                let missingName = Locale.current.localizedString(forLanguageCode: targetLanguage.minimalIdentifier)
+                throw TranslationError.missingLanguagePacks([missingName].compactMap { $0 })
+            }
+
+            // Set loading state for the selected target language (excluding source)
+            loadingLanguages = targetLanguage == sourceLanguage ? [] : [targetLanguage]
 
             // Clear old translations to prepare for new ones
             translations = []
 
-            // Perform translation with feature flags and progressive updates
-            // Prioritize the active language if set
-            let results = await service.translateToAll(
+            // Perform translation only to the selected target language
+            let result = await service.translate(
                 text: text,
                 from: sourceLanguage,
-                to: downloadedTargetLanguages,
-                priorityLanguage: activePriorityLanguage,
-                includeRomanization: includeRomanization,
-                onEachResult: { @MainActor result in
-                    // Add or update translation as it arrives
-                    if let index = translations.firstIndex(where: { $0.language == result.language }) {
-                        translations[index] = result
-                    } else {
-                        translations.append(result)
-                    }
-
-                    // Remove from loading set
-                    loadingLanguages.remove(result.language)
-
-                    // Extract source romanization from first result if available
-                    if includeRomanization && sourceRomanization == nil {
-                        sourceRomanization = result.sourceRomanization
-                    }
-                }
+                to: targetLanguage,
+                includeRomanization: includeRomanization
             )
 
-            // Fallback: extract source romanization if not yet set
-            if includeRomanization, sourceRomanization == nil, let firstResult = results.first {
-                sourceRomanization = firstResult.sourceRomanization
+            guard requestID == latestTranslationRequestID else { return }
+
+            let results = result.map { [$0] } ?? []
+            translations = results
+
+            if includeRomanization, let result {
+                sourceRomanization = result.sourceRomanization
             }
 
             // Clear loading state
-            isTranslating = false
             loadingLanguages = []
 
-            // Auto-save to history with AI-powered tagging
-            if autoSaveToHistory && !results.isEmpty {
-                await historyService.saveTranslations(
-                    results,
-                    sourceText: text,
-                    context: modelContext,
-                    aiService: aiService,
-                    tagService: tagService
-                )
+            updatePendingAutosaveSnapshot(
+                requestID: requestID,
+                sourceText: text,
+                results: results
+            )
+
+            if inputDismissedForCurrentRequest {
+                await commitPendingAutosaveIfNeeded()
             }
         } catch {
-            isTranslating = false
+            guard requestID == latestTranslationRequestID else { return }
+
             loadingLanguages = []
             if let translationError = error as? TranslationError,
                case .missingLanguagePacks = translationError {
@@ -574,12 +855,100 @@ struct TranslationView: View {
 
     private func retryLastTranslation() {
         guard !inputText.isEmpty else { return }
+
+        debounceTask?.cancel()
+        let requestID = UUID()
+        latestTranslationRequestID = requestID
+
         Task {
-            await performTranslation(text: inputText)
+            await performTranslation(text: inputText, requestID: requestID)
         }
     }
 
-    #if os(iOS)
+    private func dismissInputFocus() {
+        isInputFocused = false
+        inputDismissedForCurrentRequest = true
+    }
+
+    private func updatePendingAutosaveSnapshot(
+        requestID: UUID,
+        sourceText: String,
+        results: [TranslationResult]
+    ) {
+        guard !results.isEmpty else {
+            clearPendingAutosave()
+            return
+        }
+
+        let fingerprint = makeAutosaveFingerprint(sourceText: sourceText, results: results)
+        pendingAutosaveSnapshot = PendingAutosaveSnapshot(
+            requestID: requestID,
+            sourceText: sourceText,
+            results: results,
+            fingerprint: fingerprint
+        )
+        pendingAutosaveIsDirty = fingerprint != lastCommittedAutosaveFingerprint
+    }
+
+    private func clearPendingAutosave(resetLastCommitted: Bool = false) {
+        pendingAutosaveSnapshot = nil
+        pendingAutosaveIsDirty = false
+
+        if resetLastCommitted {
+            lastCommittedAutosaveFingerprint = nil
+        }
+    }
+
+    private func makeAutosaveFingerprint(sourceText: String, results: [TranslationResult]) -> String {
+        let sourceLanguageCode = results.first?.sourceLanguage?.minimalIdentifier ?? ""
+        let translatedEntries = results
+            .sorted { $0.language.minimalIdentifier < $1.language.minimalIdentifier }
+            .map { "\($0.language.minimalIdentifier)\u{1F}\($0.translation)" }
+            .joined(separator: "\u{1E}")
+
+        return [sourceText, sourceLanguageCode, translatedEntries].joined(separator: "\u{1D}")
+    }
+
+    private func eligiblePendingAutosaveSnapshot() -> PendingAutosaveSnapshot? {
+        guard autoSaveToHistory,
+              pendingAutosaveIsDirty,
+              let snapshot = pendingAutosaveSnapshot,
+              !snapshot.results.isEmpty,
+              snapshot.fingerprint != lastCommittedAutosaveFingerprint,
+              snapshot.requestID == latestTranslationRequestID,
+              snapshot.sourceText == inputText,
+              inputDismissedForCurrentRequest else {
+            return nil
+        }
+
+        return snapshot
+    }
+
+    private func commitPendingAutosaveIfNeeded() async {
+        guard !isCommittingAutosave else { return }
+
+        isCommittingAutosave = true
+        defer { isCommittingAutosave = false }
+
+        while let snapshot = eligiblePendingAutosaveSnapshot() {
+            let saved = await historyService.saveTranslations(
+                snapshot.results,
+                sourceText: snapshot.sourceText,
+                context: modelContext,
+                aiService: aiService,
+                tagService: tagService
+            )
+
+            if let saved { currentSavedTranslation = saved }
+            lastCommittedAutosaveFingerprint = snapshot.fingerprint
+
+            if pendingAutosaveSnapshot?.fingerprint == snapshot.fingerprint {
+                pendingAutosaveIsDirty = false
+            }
+        }
+    }
+
+#if os(iOS)
     private func loadImage(from item: PhotosPickerItem?) async {
         guard let item = item else { return }
 
@@ -614,9 +983,9 @@ struct TranslationView: View {
             }
         }
     }
-    #endif
+#endif
 
-    #if os(macOS)
+#if os(macOS)
     private func handleFileImport(_ result: Result<[URL], Error>) async {
         do {
             let urls = try result.get()
@@ -682,117 +1051,124 @@ struct TranslationView: View {
             }
         }
     }
-    #endif
+#endif
 
     private func loadInstalledLanguages() async {
-        var installed: Set<Locale.Language> = []
-
-        // Use a reference language to check installation status
-        // We'll use English as the reference since it's commonly installed
-        let referenceLanguage = Locale.Language(identifier: "en")
-
-        // Check each language in our curated list to see if it's actually installed
-        for languageInfo in SupportedLanguages.all {
-            let language = languageInfo.language
-
-            // Check if this language is installed by checking translation pair availability
-            let status = await service.getLanguageStatus(from: referenceLanguage, to: language)
-
-            if status == .installed {
-                installed.insert(language)
-            }
-
-            // Also check the reverse direction and add reference language itself
-            if language.minimalIdentifier == referenceLanguage.minimalIdentifier {
-                installed.insert(language)
-            }
-        }
-
-        installedLanguages = installed
+        let loadedLanguages = await service.installedLanguages()
+        installedLanguages = SupportedLanguages.enabledLanguages(
+            from: loadedLanguages,
+            disabledLanguageCodes: disabledLanguageCodes
+        )
+        reconcileLanguageSelection()
     }
 }
 
-// MARK: - Source Language Chip Row
+#if os(iOS)
+private struct LanguageAwareTextEditor: UIViewRepresentable {
+    @Binding var text: String
+    let inputLanguage: Locale.Language?
+    let isFocused: FocusState<Bool>.Binding
 
-struct SourceLanguageChipRow: View {
-    let availableLanguages: [Locale.Language]
-    let selectedLanguage: Locale.Language?
-    let onLanguageSelected: (Locale.Language) -> Void
-    let onAutoSelected: () -> Void
+    func makeUIView(context: Context) -> KeyboardLanguageTextView {
+        let textView = KeyboardLanguageTextView()
+        textView.delegate = context.coordinator
+        textView.backgroundColor = .clear
+        textView.font = .preferredFont(forTextStyle: .body)
+        textView.adjustsFontForContentSizeCategory = true
+        textView.textContainer.lineFragmentPadding = 0
+        textView.textContainerInset = UIEdgeInsets(top: 8, left: 4, bottom: 8, right: 4)
+        textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return textView
+    }
 
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                // Auto option
-                Button {
-                    onAutoSelected()
-                } label: {
-                    Text("Auto")
-                        .font(.subheadline)
-                        .fontWeight(selectedLanguage == nil ? .semibold : .regular)
-                        .foregroundStyle(selectedLanguage == nil ? .white : .primary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(selectedLanguage == nil ? Color.accentColor : Color(.secondarySystemFill))
-                        .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
+    func updateUIView(_ textView: KeyboardLanguageTextView, context: Context) {
+        context.coordinator.parent = self
 
-                // Language options
-                ForEach(availableLanguages, id: \.minimalIdentifier) { language in
-                    let isActive = selectedLanguage?.minimalIdentifier == language.minimalIdentifier
-                    let languageName = Locale.current.localizedString(forLanguageCode: language.minimalIdentifier) ?? language.minimalIdentifier
-
-                    Button {
-                        onLanguageSelected(language)
-                    } label: {
-                        Text(languageName)
-                            .font(.subheadline)
-                            .fontWeight(isActive ? .semibold : .regular)
-                            .foregroundStyle(isActive ? .white : .primary)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(isActive ? Color.accentColor : Color(.secondarySystemFill))
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal)
+        if textView.text != text {
+            textView.text = text
         }
-        .padding(.vertical, 8)
+
+        textView.preferredLanguageIdentifier = inputLanguage?.minimalIdentifier
+
+        if isFocused.wrappedValue, !textView.isFirstResponder {
+            textView.becomeFirstResponder()
+        } else if !isFocused.wrappedValue, textView.isFirstResponder {
+            textView.resignFirstResponder()
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var parent: LanguageAwareTextEditor
+
+        init(parent: LanguageAwareTextEditor) {
+            self.parent = parent
+        }
+
+        func textViewDidChange(_ textView: UITextView) {
+            guard parent.text != textView.text else { return }
+            parent.text = textView.text
+        }
+
+        func textViewDidBeginEditing(_ textView: UITextView) {
+            parent.isFocused.wrappedValue = true
+        }
+
+        func textViewDidEndEditing(_ textView: UITextView) {
+            parent.isFocused.wrappedValue = false
+        }
     }
 }
 
-// MARK: - Confidence Badge
-
-struct ConfidenceBadge: View {
-    let confidence: Double
-    
-    private var color: Color {
-        if confidence >= 0.8 {
-            return .green
-        } else if confidence >= 0.5 {
-            return .orange
-        } else {
-            return .red
+private final class KeyboardLanguageTextView: UITextView {
+    var preferredLanguageIdentifier: String? {
+        didSet {
+            guard oldValue != preferredLanguageIdentifier else { return }
+            reloadInputViews()
         }
     }
-    
-    private var label: String {
-        String(format: "%.0f%%", confidence * 100)
+
+    override var textInputMode: UITextInputMode? {
+        guard let preferredLanguageIdentifier,
+              let inputMode = Self.inputMode(matching: preferredLanguageIdentifier) else {
+            return super.textInputMode
+        }
+
+        return inputMode
     }
-    
-    var body: some View {
-        Text(label)
-            .font(.caption2)
-            .fontWeight(.semibold)
-            .foregroundStyle(.white)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(color)
-            .clipShape(Capsule())
+
+    private static func inputMode(matching preferredIdentifier: String) -> UITextInputMode? {
+        let preferred = normalizedLanguageIdentifier(preferredIdentifier)
+
+        if let exactMatch = UITextInputMode.activeInputModes.first(where: { inputMode in
+            guard let primaryLanguage = inputMode.primaryLanguage else { return false }
+            return normalizedLanguageIdentifier(primaryLanguage) == preferred
+        }) {
+            return exactMatch
+        }
+
+        let preferredBase = baseLanguageCode(preferred)
+        return UITextInputMode.activeInputModes.first { inputMode in
+            guard let primaryLanguage = inputMode.primaryLanguage else { return false }
+            return baseLanguageCode(normalizedLanguageIdentifier(primaryLanguage)) == preferredBase
+        }
     }
+
+    private static func normalizedLanguageIdentifier(_ identifier: String) -> String {
+        identifier.replacingOccurrences(of: "_", with: "-").lowercased()
+    }
+
+    private static func baseLanguageCode(_ identifier: String) -> String {
+        identifier.split(separator: "-").first.map(String.init) ?? identifier
+    }
+}
+#endif
+
+private func localizedLanguageName(for language: Locale.Language) -> String {
+    SupportedLanguages.displayName(for: language)
 }
 
 #Preview {

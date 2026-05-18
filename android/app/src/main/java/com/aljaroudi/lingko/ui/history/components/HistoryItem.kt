@@ -3,18 +3,17 @@ package com.aljaroudi.lingko.ui.history.components
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Label
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextDirection
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.aljaroudi.lingko.R
+import com.aljaroudi.lingko.domain.model.GroupedTranslationItem
 import com.aljaroudi.lingko.domain.model.TranslationGroup
 import com.aljaroudi.lingko.ui.tags.TagChip
+import com.aljaroudi.lingko.ui.translation.components.TranslationResultCard
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -23,20 +22,23 @@ import java.util.Locale
 @Composable
 fun HistoryItem(
     group: TranslationGroup,
+    speakingItemId: String?,
+    onSpeak: (GroupedTranslationItem) -> Unit,
+    onCopy: (String) -> Unit,
     onFavoriteToggle: () -> Unit,
     onDelete: () -> Unit,
     onEditTags: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val dateFormatter = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
+    val sourceLangName = group.sourceLanguage?.displayName ?: stringResource(R.string.label_auto_detect)
+
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { dismissValue ->
             if (dismissValue == SwipeToDismissBoxValue.EndToStart) {
                 onDelete()
                 true
-            } else {
-                false
-            }
+            } else false
         }
     )
 
@@ -51,7 +53,7 @@ fun HistoryItem(
             ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete",
+                    contentDescription = stringResource(R.string.cd_delete),
                     tint = MaterialTheme.colorScheme.error
                 )
             }
@@ -64,144 +66,78 @@ fun HistoryItem(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 4.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                // Header with source language and action buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = group.sourceLanguage?.nativeName ?: "Auto Detect",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
+            Column(modifier = Modifier.fillMaxWidth()) {
+                group.translations.forEachIndexed { index, item ->
+                    val itemId = "${group.groupId}:${item.targetLanguage.code}"
+                    TranslationResultCard(
+                        sourceLanguageName = sourceLangName,
+                        sourceText = group.sourceText,
+                        targetLanguageName = item.targetLanguage.displayName,
+                        translation = item.translatedText,
+                        romanization = item.romanization,
+                        isRTL = item.targetLanguage.script.isRTL,
+                        isSpeaking = speakingItemId == itemId,
+                        isFavorite = group.isFavorite,
+                        onSpeak = { onSpeak(item) },
+                        onCopy = { onCopy(item.translatedText) },
+                        onFavoriteToggle = onFavoriteToggle
                     )
-
-                    Row {
-                        IconButton(onClick = onEditTags) {
-                            Icon(
-                                imageVector = Icons.Default.Label,
-                                contentDescription = "Edit tags",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        
-                        IconButton(onClick = onFavoriteToggle) {
-                            Icon(
-                                imageVector = if (group.isFavorite) {
-                                    Icons.Default.Favorite
-                                } else {
-                                    Icons.Default.FavoriteBorder
-                                },
-                                contentDescription = if (group.isFavorite) {
-                                    "Remove from favorites"
-                                } else {
-                                    "Add to favorites"
-                                },
-                                tint = if (group.isFavorite) {
-                                    MaterialTheme.colorScheme.error
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                            )
-                        }
+                    if (index < group.translations.lastIndex) {
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Source text
-                Text(
-                    text = group.sourceText,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // All translations
-                group.translations.forEach { translation ->
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = translation.targetLanguage.nativeName,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-
-                        Spacer(modifier = Modifier.height(2.dp))
-
-                        Text(
-                            text = translation.translatedText,
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                textDirection = if (translation.targetLanguage.script.isRTL) {
-                                    TextDirection.Rtl
-                                } else {
-                                    TextDirection.Ltr
-                                }
-                            ),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                        // Romanization if available
-                        if (translation.romanization != null) {
-                            Spacer(modifier = Modifier.height(2.dp))
+                // Tags + timestamp footer
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 12.dp)
+                ) {
+                    if (group.tags.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            group.tags.take(3).forEach { tag -> TagChip(tag = tag) }
+                            if (group.tags.size > 3) {
+                                Text(
+                                    text = "+${group.tags.size - 3}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(modifier = Modifier.weight(1f))
+                            TextButton(
+                                onClick = onEditTags,
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                            ) {
+                                Text(
+                                    text = "Edit tags",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
+                    } else {
+                        TextButton(
+                            onClick = onEditTags,
+                            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
+                        ) {
                             Text(
-                                text = translation.romanization,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                text = "Add tags",
+                                style = MaterialTheme.typography.labelSmall
                             )
                         }
                     }
-
-                    if (translation != group.translations.last()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                    }
+                    Text(
+                        text = dateFormatter.format(Date(group.timestamp)),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
                 }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Tags
-                if (group.tags.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        group.tags.take(3).forEach { tag ->
-                            TagChip(tag = tag)
-                        }
-                        if (group.tags.size > 3) {
-                            Text(
-                                text = "+${group.tags.size - 3}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .align(Alignment.CenterVertically)
-                                    .padding(start = 4.dp)
-                            )
-                        }
-                    }
-                }
-
-                // Timestamp
-                Text(
-                    text = dateFormatter.format(Date(group.timestamp)),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                )
             }
         }
     }

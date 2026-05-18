@@ -2,6 +2,8 @@
 
 A native iOS translation app leveraging on-device Translation SDKs for iOS and Android. Apple's NaturalLanguage framework, and Apple Intelligence for comprehensive multi-language translation with deep linguistic analysis. On Android, Google's ML Kit is used for translation and other features.
 
+More on [my portfolio](https://aljaroudi.com)
+
 ## Features
 
 | Feature                         | Apple | Android |

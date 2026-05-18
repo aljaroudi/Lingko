@@ -10,6 +10,7 @@ import AVFoundation
 import OSLog
 
 @MainActor
+@Observable
 final class AudioService {
     private let logger = Logger(subsystem: "com.lingko.audio", category: "service")
     private let synthesizer: AVSpeechSynthesizer
@@ -94,26 +95,6 @@ final class AudioService {
             if self.synthesizer.isSpeaking {
                 self.logger.info("🔇 Stopping speech")
                 self.synthesizer.stopSpeaking(at: .immediate)
-            }
-        }
-    }
-
-    /// Pause the current speech
-    func pause() {
-        DispatchQueue.main.async {
-            if self.synthesizer.isSpeaking && !self.synthesizer.isPaused {
-                self.logger.info("⏸️  Pausing speech")
-                self.synthesizer.pauseSpeaking(at: .word)
-            }
-        }
-    }
-
-    /// Resume paused speech
-    func resume() {
-        DispatchQueue.main.async {
-            if self.synthesizer.isPaused {
-                self.logger.info("▶️  Resuming speech")
-                self.synthesizer.continueSpeaking()
             }
         }
     }

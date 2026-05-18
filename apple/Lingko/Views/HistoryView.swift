@@ -93,6 +93,9 @@ struct HistoryView: View {
             .sheet(isPresented: $showTagManagement) {
                 TagManagementView()
             }
+            .navigationDestination(for: HistoryAIInsightsDestination.self) { destination in
+                AIInsightsDetailView(destination: destination)
+            }
             .onAppear {
                 // Initialize default tags if they don't exist
                 tagService.initializeDefaultTags(context: modelContext)
@@ -192,7 +195,7 @@ struct HistoryView: View {
                     isSelected: selectedTagFilter == nil,
                     name: "All",
                     icon: "circle.grid.2x2",
-                    color: nil
+                    color: .blue
                 ) {
                     selectedTagFilter = nil
                 }
@@ -203,7 +206,7 @@ struct HistoryView: View {
                         isSelected: selectedTagFilter?.id == tag.id,
                         name: tag.name,
                         icon: tag.icon,
-                        color: tag.color
+                        color: tag.chipColor
                     ) {
                         if selectedTagFilter?.id == tag.id {
                             selectedTagFilter = nil
@@ -221,7 +224,7 @@ struct HistoryView: View {
     private var historyList: some View {
         List {
             ForEach(groupedHistory, id: \.0) { section, translations in
-                Section(section) {
+                Section {
                     ForEach(translations) { translation in
                         HistoryRow(
                             translation: translation,
@@ -255,15 +258,21 @@ struct HistoryView: View {
                             }
                             .tint(.yellow)
                         }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                     }
+                } header: {
+                    Text(section)
+                        .font(.footnote)
+                        .fontWeight(.semibold)
+                        .textCase(nil)
                 }
             }
         }
-        #if os(iOS)
-        .listStyle(.insetGrouped)
-        #elseif os(macOS)
-        .listStyle(.inset)
-        #endif
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color.platformGroupedBackground)
     }
 
     @ViewBuilder
@@ -300,145 +309,211 @@ private struct HistoryRow: View {
     let onLoad: () -> Void
     let onEditTags: () -> Void
 
-    @State private var isExpanded = false
+    @State private var sourceAudioService = AudioService()
+    @State private var isSpeakingSource = false
+    @AppStorage("defaultSpeechRate") private var speechRate: Double = 0.5
+
+    private var sourceLanguage: Locale.Language? {
+        translation.sourceLanguageCode.map { Locale.Language(identifier: $0) }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button(action: onLoad) {
-                HStack(alignment: .top, spacing: 12) {
-                    // Favorite button
-                    Button(action: onToggleFavorite) {
-                        Image(systemName: translation.isFavorite ? "star.fill" : "star")
-                            .foregroundStyle(translation.isFavorite ? .yellow : .gray)
-                            .font(.title3)
-                    }
-                    .buttonStyle(.plain)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        // Header: source language and timestamp
-                        HStack(spacing: 6) {
-                            Text(translation.sourceLanguageName)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Image(systemName: "arrow.right")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                            Text("\(translation.translationCount) languages")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text(translation.timestamp, style: .time)
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-
-                        // Source text
-                        Text(translation.sourceText)
-                            .font(.body)
-                            .foregroundStyle(.primary)
-                            .lineLimit(2)
-
-                        // Show translations
-                        if let translations = translation.decodedTranslations {
-                            let displayCount = isExpanded ? translations.count : min(3, translations.count)
-
-                            ForEach(Array(translations.prefix(displayCount).enumerated()), id: \.offset) { _, trans in
-                                TranslationEntryView(entry: trans)
-                            }
-
-                            // Show more/less button if more than 2 translations
-                            if translations.count > 3 {
-                                Button(action: { isExpanded.toggle() }) {
-                                    HStack(spacing: 4) {
-                                        Text(isExpanded ? "Show less" : "Show \(translations.count - 2) more")
-                                            .font(.caption)
-                                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                                            .font(.caption2)
-                                    }
-                                    .foregroundStyle(.blue)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
+            // Source block
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(translation.sourceLanguageName)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Text(translation.sourceText)
+                        .font(.title2.bold())
+                        .foregroundStyle(.primary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.vertical, 4)
-            }
-            .buttonStyle(.plain)
-
-            // Tags section
-            if let tags = translation.tags, !tags.isEmpty {
-                HStack(spacing: 8) {
-                    ForEach(tags) { tag in
-                        TagChip(tag: tag)
-                    }
-
-                    Spacer()
-
-                    Button(action: onEditTags) {
-                        Image(systemName: "tag")
-                            .font(.caption)
-                            .foregroundStyle(.blue)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.leading, 52)
-                .padding(.trailing, 12)
-                .padding(.top, 4)
-                .padding(.bottom, 8)
-            } else {
-                // Show "Add tags" button if no tags
-                Button(action: onEditTags) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "tag")
-                            .font(.caption2)
-                        Text("Add tags")
-                            .font(.caption)
-                    }
-                    .foregroundStyle(.secondary)
+                Button(action: toggleSourceSpeech) {
+                    Image(systemName: isSpeakingSource ? "stop.circle.fill" : "play.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.primary)
                 }
                 .buttonStyle(.plain)
-                .padding(.leading, 52)
-                .padding(.top, 4)
-                .padding(.bottom, 8)
+                .accessibilityLabel(isSpeakingSource ? "Stop speaking" : "Speak source")
+            }
+            .padding()
+            .contentShape(Rectangle())
+            .onTapGesture { onLoad() }
+
+            // Target blocks
+            if let entries = translation.decodedTranslations, !entries.isEmpty {
+                ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
+                    Divider()
+                    TargetBlock(
+                        entry: entry,
+                        source: translation,
+                        isFavorite: translation.isFavorite,
+                        onToggleFavorite: onToggleFavorite,
+                        onEditTags: onEditTags
+                    )
+                }
+            }
+
+            // Tags (compact, translation-level)
+            if let tags = translation.tags, !tags.isEmpty {
+                Divider()
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(tags) { tag in TagChip(tag: tag) }
+                        Button(action: onEditTags) {
+                            Image(systemName: "tag")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                }
+            }
+        }
+        .background(Color.platformBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func toggleSourceSpeech() {
+        guard let lang = sourceLanguage else { return }
+        if isSpeakingSource {
+            sourceAudioService.stop()
+            isSpeakingSource = false
+        } else {
+            sourceAudioService.speak(text: translation.sourceText, language: lang, rate: Float(speechRate))
+            isSpeakingSource = true
+            Task {
+                try? await Task.sleep(for: .milliseconds(100))
+                while isSpeakingSource && sourceAudioService.isPlaying {
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+                isSpeakingSource = false
             }
         }
     }
 }
 
-// MARK: - Translation Entry View
+// MARK: - Target Block
 
-private struct TranslationEntryView: View {
-    let entry: DataSchema.TranslationEntry
+private struct TargetBlock: View {
+    let entry: TranslationEntry
+    let source: SavedTranslation
+    let isFavorite: Bool
+    let onToggleFavorite: () -> Void
+    let onEditTags: () -> Void
+
+    @State private var audioService = AudioService()
+    @State private var isSpeaking = false
+    @State private var showCopyConfirmation = false
+    @AppStorage("defaultSpeechRate") private var speechRate: Double = 0.5
+
+    private var language: Locale.Language { Locale.Language(identifier: entry.languageCode) }
+
+    private var layoutDirection: LayoutDirection {
+        Script.detect(from: language).isRTL ? .rightToLeft : .leftToRight
+    }
+
+    private var detailDestination: HistoryAIInsightsDestination {
+        HistoryAIInsightsDestination(
+            sourceText: source.sourceText,
+            sourceLanguageCode: source.sourceLanguageCode,
+            languageCode: entry.languageCode,
+            translationText: entry.text,
+            romanization: entry.romanization,
+            detectionConfidence: source.detectionConfidence
+        )
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text(entry.languageName)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+        VStack(alignment: .leading, spacing: 12) {
+            // Translation text + play
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(entry.languageName)
+                        .font(.subheadline)
+                        .foregroundStyle(.accent)
+                    Text(entry.text)
+                        .font(.title2)
+                        .foregroundStyle(.accent)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: layoutDirection == .rightToLeft ? .trailing : .leading)
+                        .environment(\.layoutDirection, layoutDirection)
+                    if let romanization = entry.romanization {
+                        Text(romanization)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .italic()
+                            .textSelection(.enabled)
+                    }
+                }
+                Button(action: toggleSpeech) {
+                    Image(systemName: isSpeaking ? "stop.circle.fill" : "play.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.accent)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isSpeaking ? "Stop speaking" : "Speak translation")
+            }
 
-                Text(entry.text)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            // Action row
+            HStack(spacing: 20) {
+                Button(action: copyToClipboard) {
+                    Image(systemName: showCopyConfirmation ? "checkmark" : "doc.on.doc")
+                        .foregroundStyle(.accent)
+                }
+                .accessibilityLabel(showCopyConfirmation ? "Copied" : "Copy translation")
+                
+                Button(action: onToggleFavorite) {
+                    Image(systemName: isFavorite ? "star.fill" : "star")
+                        .foregroundStyle(isFavorite ? Color.yellow : Color.accentColor)
+                }
+                .accessibilityLabel(isFavorite ? "Remove from favorites" : "Add to favorites")
+
+                NavigationLink(value: detailDestination) {
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(.primary.opacity(0.4))
+                }
+                .accessibilityLabel("View details")
+                .navigationLinkIndicatorVisibility(.hidden)
+
+                Spacer(minLength: 0)
+            }
+            .buttonStyle(.plain)
+            .font(.title3)
+        }
+        .padding()
+        .sensoryFeedback(.success, trigger: showCopyConfirmation)
+    }
+
+    private func toggleSpeech() {
+        if isSpeaking {
+            audioService.stop()
+            isSpeaking = false
+        } else {
+            audioService.speak(text: entry.text, language: language, rate: Float(speechRate))
+            isSpeaking = true
+            Task {
+                try? await Task.sleep(for: .milliseconds(100))
+                while isSpeaking && audioService.isPlaying {
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+                isSpeaking = false
             }
         }
-        .padding(.leading, 8)
-        .padding(.vertical, 2)
     }
 
-    private func sentimentIcon(for sentiment: Double?) -> String {
-        guard let sentiment else { return "circle" }
-        if sentiment > 0.3 { return "face.smiling" }
-        if sentiment < -0.3 { return "face.frowning" }
-        return "circle"
-    }
-
-    private func sentimentColor(for sentiment: Double?) -> Color {
-        guard let sentiment else { return .gray }
-        if sentiment > 0.3 { return .green }
-        if sentiment < -0.3 { return .red }
-        return .gray
+    private func copyToClipboard() {
+        PlatformUtils.copyToPasteboard(entry.text)
+        withAnimation { showCopyConfirmation = true }
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            withAnimation { showCopyConfirmation = false }
+        }
     }
 }
 
@@ -446,13 +521,6 @@ private struct TranslationEntryView: View {
 
 private struct TagChip: View {
     let tag: Tag
-
-    var chipColor: Color {
-        if let hex = tag.color {
-            return Color(hex: hex) ?? .blue
-        }
-        return .blue
-    }
 
     var body: some View {
         HStack(spacing: 4) {
@@ -464,8 +532,8 @@ private struct TagChip: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(chipColor.opacity(0.15))
-        .foregroundStyle(chipColor)
+        .background(tag.chipColor.opacity(0.15))
+        .foregroundStyle(tag.chipColor)
         .clipShape(Capsule())
     }
 }
@@ -474,15 +542,8 @@ private struct TagFilterChip: View {
     let isSelected: Bool
     let name: String
     let icon: String
-    let color: String?
+    let color: Color
     let action: () -> Void
-
-    var chipColor: Color {
-        if let hex = color {
-            return Color(hex: hex) ?? .blue
-        }
-        return .blue
-    }
 
     var body: some View {
         Button(action: action) {
@@ -496,15 +557,26 @@ private struct TagFilterChip: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             #if os(iOS)
-            .background(isSelected ? chipColor : Color(.systemGray5))
+            .background(isSelected ? color : Color(.systemGray5))
             #elseif os(macOS)
-            .background(isSelected ? chipColor : Color.secondary.opacity(0.2))
+            .background(isSelected ? color : Color.secondary.opacity(0.2))
             #endif
             .foregroundStyle(isSelected ? .white : .primary)
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)
     }
+}
+
+// MARK: - Navigation Destination
+
+struct HistoryAIInsightsDestination: Hashable {
+    let sourceText: String
+    let sourceLanguageCode: String?
+    let languageCode: String
+    let translationText: String
+    let romanization: String?
+    let detectionConfidence: Double
 }
 
 #Preview {

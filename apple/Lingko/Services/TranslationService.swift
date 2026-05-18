@@ -27,13 +27,74 @@ struct TranslationService {
 
     /// Check if a language pair is installed and ready for offline translation
     func isLanguageInstalled(from source: Locale.Language, to target: Locale.Language) async -> Bool {
-        let status = await languageAvailability.status(from: source, to: target)
+        let status = await getLanguageStatus(from: source, to: target)
+        return status == .installed
+    }
+
+    /// Check if a language pair is installed using a preloaded supported-language list.
+    func isLanguageInstalled(
+        from source: Locale.Language,
+        to target: Locale.Language,
+        supportedLanguages: [Locale.Language]
+    ) async -> Bool {
+        let status = await getLanguageStatus(from: source, to: target, supportedLanguages: supportedLanguages)
         return status == .installed
     }
 
     /// Get the availability status for a language pair
     func getLanguageStatus(from source: Locale.Language, to target: Locale.Language) async -> LanguageAvailability.Status {
-        await languageAvailability.status(from: source, to: target)
+        let supportedLanguages = await getSupportedLanguages()
+        return await getLanguageStatus(from: source, to: target, supportedLanguages: supportedLanguages)
+    }
+
+    /// Get the availability status for a language pair using a preloaded supported-language list.
+    func getLanguageStatus(
+        from source: Locale.Language,
+        to target: Locale.Language,
+        supportedLanguages: [Locale.Language]
+    ) async -> LanguageAvailability.Status {
+        guard isValidPair(source: source, target: target, supportedLanguages: supportedLanguages) else {
+            return .unsupported
+        }
+
+        return await languageAvailability.status(from: source, to: target)
+    }
+
+    func isLanguageSupported(_ language: Locale.Language, in supportedLanguages: [Locale.Language]) -> Bool {
+        let supportedIDs = Set(supportedLanguages.map { canonicalLanguageIdentifier(for: $0) })
+        return supportedIDs.contains(canonicalLanguageIdentifier(for: language))
+    }
+
+    func isSameLanguage(_ lhs: Locale.Language, _ rhs: Locale.Language) -> Bool {
+        canonicalLanguageIdentifier(for: lhs) == canonicalLanguageIdentifier(for: rhs)
+    }
+
+    func installedLanguages(referenceLanguage: Locale.Language = Locale.Language(identifier: "en")) async -> Set<Locale.Language> {
+        let supportedLanguages = await getSupportedLanguages()
+        var installed: Set<Locale.Language> = []
+
+        if isLanguageSupported(referenceLanguage, in: supportedLanguages) {
+            installed.insert(canonicalLanguage(for: referenceLanguage))
+        }
+
+        for language in supportedLanguages {
+            guard !isSameLanguage(referenceLanguage, language),
+                  isLanguageSupported(language, in: supportedLanguages) else {
+                continue
+            }
+
+            let status = await getLanguageStatus(
+                from: referenceLanguage,
+                to: language,
+                supportedLanguages: supportedLanguages
+            )
+
+            if status == .installed {
+                installed.insert(language)
+            }
+        }
+
+        return installed
     }
 
     // MARK: - Linguistic Analysis Support
@@ -62,6 +123,7 @@ struct TranslationService {
         for text: String,
         preferredLanguages: Set<Locale.Language>? = nil,
         installedLanguages: Set<Locale.Language>? = nil,
+        supportedLanguages: Set<Locale.Language>? = nil,
         maxResults: Int = 5
     ) -> [(language: Locale.Language, confidence: Double, isDownloaded: Bool)] {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -80,29 +142,28 @@ struct TranslationService {
             return []
         }
 
-        // Convert to supported languages list
-        let supportedLanguageIds = Set(SupportedLanguages.allLanguages.map { $0.minimalIdentifier })
-        let preferredLanguageIds = preferredLanguages.map { Set($0.map { $0.minimalIdentifier }) }
-        let installedLanguageIds = installedLanguages.map { Set($0.map { $0.minimalIdentifier }) }
+        let supportedLanguageIds = supportedLanguages.map { Set($0.map { canonicalLanguageIdentifier(for: $0) }) }
+        let preferredLanguageIds = preferredLanguages.map { Set($0.map { canonicalLanguageIdentifier(for: $0) }) }
+        let installedLanguageIds = installedLanguages.map { Set($0.map { canonicalLanguageIdentifier(for: $0) }) }
         
         var results: [(language: Locale.Language, confidence: Double, isDownloaded: Bool)] = []
         
         for (nlLanguage, confidence) in hypotheses {
             let localeLanguage = Locale.Language(identifier: nlLanguage.rawValue)
             let languageId = localeLanguage.minimalIdentifier
+            let canonicalLanguageId = canonicalLanguageIdentifier(for: localeLanguage)
             
-            // Only include supported languages
-            guard supportedLanguageIds.contains(languageId) else {
+            if let supportedLanguageIds, !supportedLanguageIds.contains(canonicalLanguageId) {
                 logger.debug("Filtering out unsupported language: \(languageId)")
                 continue
             }
             
             // Check if language is downloaded
-            let isDownloaded = installedLanguageIds?.contains(languageId) ?? true
+            let isDownloaded = installedLanguageIds?.contains(canonicalLanguageId) ?? true
             
             // Apply confidence boost for preferred languages
             var adjustedConfidence = confidence
-            if let preferredIds = preferredLanguageIds, preferredIds.contains(languageId) {
+            if let preferredIds = preferredLanguageIds, preferredIds.contains(canonicalLanguageId) {
                 adjustedConfidence = min(1.0, confidence + 0.2)
                 logger.debug("Boosting confidence for preferred language \(languageId): \(confidence) -> \(adjustedConfidence)")
             }
@@ -122,7 +183,7 @@ struct TranslationService {
     /// Detects the dominant language in the given text with confidence score
     /// - Parameter text: The text to analyze
     /// - Returns: The most likely language and its confidence score
-    /// - Note: This method is kept for backward compatibility. Use `detectLanguages(for:preferredLanguages:installedLanguages:)` for multi-language detection.
+    /// - Note: This method is kept for backward compatibility. Use `detectLanguages(for:preferredLanguages:installedLanguages:supportedLanguages:)` for multi-language detection.
     func detectLanguage(for text: String) -> (language: Locale.Language?, confidence: Double) {
         let results = detectLanguages(for: text, preferredLanguages: nil, installedLanguages: nil, maxResults: 1)
         return results.first.map { ($0.language, $0.confidence) } ?? (nil, 0.0)
@@ -231,6 +292,51 @@ struct TranslationService {
 
     // MARK: - Translation
 
+    /// Translates text to a single target language.
+    func translate(
+        text: String,
+        from sourceLanguage: Locale.Language,
+        to targetLanguage: Locale.Language,
+        includeRomanization: Bool = true,
+        romanizationService: RomanizationService = RomanizationService()
+    ) async -> TranslationResult? {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            logger.debug("Empty text provided for translation")
+            return nil
+        }
+
+        let supportedLanguages = await getSupportedLanguages()
+        guard isValidPair(source: sourceLanguage, target: targetLanguage, supportedLanguages: supportedLanguages) else {
+            return nil
+        }
+
+        let status = await getLanguageStatus(
+            from: sourceLanguage,
+            to: targetLanguage,
+            supportedLanguages: supportedLanguages
+        )
+        guard status == .installed else {
+            logger.warning("⚠️  Language pair not installed: \(sourceLanguage.minimalIdentifier) -> \(targetLanguage.minimalIdentifier) (status: \(String(describing: status)))")
+            return nil
+        }
+
+        let sourceRomanization = includeRomanization && romanizationService.needsRomanization(language: sourceLanguage)
+            ? romanizationService.romanize(text: text, language: sourceLanguage)
+            : nil
+
+        logger.info("🌍 Starting translation from \(sourceLanguage.minimalIdentifier) to \(targetLanguage.minimalIdentifier)")
+
+        return await translateSingle(
+            text: text,
+            from: sourceLanguage,
+            to: targetLanguage,
+            detectionConfidence: 1.0,
+            includeRomanization: includeRomanization,
+            romanizationService: romanizationService,
+            sourceRomanization: sourceRomanization
+        )
+    }
+
     /// Translates text to all specified target languages with optional prioritization
     /// - Parameter priorityLanguage: If provided, this language will be translated first before others
     func translateToAll(
@@ -252,9 +358,15 @@ struct TranslationService {
             return []
         }
 
+        let supportedLanguages = await getSupportedLanguages()
+
         // Detect source language if not provided
         let (detectedLanguage, confidence) = sourceLanguage == nil
-            ? detectLanguage(for: text)
+            ? detectLanguages(
+                for: text,
+                supportedLanguages: Set(supportedLanguages),
+                maxResults: 1
+            ).first.map { ($0.language, $0.confidence) } ?? (nil, 0.0)
             : (sourceLanguage, 1.0)
 
         guard let sourceLanguage = detectedLanguage else {
@@ -262,7 +374,16 @@ struct TranslationService {
             return []
         }
 
-        logger.info("🌍 Starting translation from \(sourceLanguage.minimalIdentifier) to \(targetLanguages.count) target languages")
+        let validTargetLanguages = targetLanguages.filter {
+            isValidPair(source: sourceLanguage, target: $0, supportedLanguages: supportedLanguages)
+        }
+
+        guard !validTargetLanguages.isEmpty else {
+            logger.debug("No valid target languages for source \(sourceLanguage.minimalIdentifier)")
+            return []
+        }
+
+        logger.info("🌍 Starting translation from \(sourceLanguage.minimalIdentifier) to \(validTargetLanguages.count) target languages")
 
         // Romanize source text if needed
         let sourceRomanization = includeRomanization && romanizationService.needsRomanization(language: sourceLanguage)
@@ -272,8 +393,12 @@ struct TranslationService {
         var results: [TranslationResult] = []
 
         // If there's a priority language, translate it first
-        if let priority = priorityLanguage, targetLanguages.contains(priority), priority != sourceLanguage {
-            let status = await getLanguageStatus(from: sourceLanguage, to: priority)
+        if let priority = priorityLanguage, validTargetLanguages.contains(priority) {
+            let status = await getLanguageStatus(
+                from: sourceLanguage,
+                to: priority,
+                supportedLanguages: supportedLanguages
+            )
             if status == .installed {
                 logger.info("🎯 Translating priority language first: \(priority.minimalIdentifier)")
                 if let result = await translateSingle(
@@ -295,15 +420,19 @@ struct TranslationService {
         }
 
         // Get remaining languages (excluding priority if already translated)
-        let remainingLanguages = targetLanguages.filter { language in
-            language != sourceLanguage && !results.contains(where: { $0.language == language })
+        let remainingLanguages = validTargetLanguages.filter { language in
+            !results.contains(where: { $0.language == language })
         }
 
         // Use TaskGroup for concurrent translations of remaining languages
         let remainingResults = await withTaskGroup(of: TranslationResult?.self) { group in
             for targetLanguage in remainingLanguages {
                 // Check availability before attempting translation
-                let status = await getLanguageStatus(from: sourceLanguage, to: targetLanguage)
+                let status = await getLanguageStatus(
+                    from: sourceLanguage,
+                    to: targetLanguage,
+                    supportedLanguages: supportedLanguages
+                )
                 guard status == .installed else {
                     logger.warning("⚠️  Language pair not installed: \(sourceLanguage.minimalIdentifier) -> \(targetLanguage.minimalIdentifier) (status: \(String(describing: status)))")
                     continue
@@ -342,7 +471,7 @@ struct TranslationService {
 
         results.append(contentsOf: remainingResults)
 
-        let attemptedCount = targetLanguages.count - (targetLanguages.contains(sourceLanguage) ? 1 : 0)
+        let attemptedCount = validTargetLanguages.count
         logger.info("✅ Completed \(results.count)/\(attemptedCount) translations")
 
         if results.isEmpty && attemptedCount > 0 {
@@ -367,6 +496,11 @@ struct TranslationService {
         romanizationService: RomanizationService,
         sourceRomanization: String?
     ) async -> TranslationResult? {
+        guard !isSameLanguage(sourceLanguage, targetLanguage) else {
+            logger.debug("Skipping same-language translation")
+            return nil
+        }
+
         do {
             let session = TranslationSession(installedSource: sourceLanguage, target: targetLanguage)
             let response = try await session.translate(text)
@@ -375,14 +509,11 @@ struct TranslationService {
 
             // Romanize target translation if needed
             var targetRomanization: String?
-            var romanizationSystem: RomanizationSystem?
-
             if includeRomanization && romanizationService.needsRomanization(language: targetLanguage) {
                 targetRomanization = romanizationService.romanize(
                     text: response.targetText,
                     language: targetLanguage
                 )
-                romanizationSystem = RomanizationSystem.defaultSystem(for: targetLanguage)
             }
 
             return TranslationResult(
@@ -392,12 +523,54 @@ struct TranslationService {
                 detectionConfidence: detectionConfidence,
                 romanization: targetRomanization,
                 sourceRomanization: sourceRomanization,
-                romanizationSystem: romanizationSystem,
                 linguisticAnalysis: nil
             )
         } catch {
             logger.error("Translation failed for \(targetLanguage.minimalIdentifier): \(error.localizedDescription)")
             return nil
+        }
+    }
+
+    private func isValidPair(
+        source: Locale.Language,
+        target: Locale.Language,
+        supportedLanguages: [Locale.Language]
+    ) -> Bool {
+        guard !isSameLanguage(source, target) else {
+            logger.debug("Skipping same-language pair: \(source.minimalIdentifier) -> \(target.minimalIdentifier)")
+            return false
+        }
+
+        guard isLanguageSupported(source, in: supportedLanguages),
+              isLanguageSupported(target, in: supportedLanguages) else {
+            logger.debug("Skipping unsupported pair: \(source.minimalIdentifier) -> \(target.minimalIdentifier)")
+            return false
+        }
+
+        return true
+    }
+
+    private func canonicalLanguage(for language: Locale.Language) -> Locale.Language {
+        Locale.Language(identifier: canonicalLanguageIdentifier(for: language))
+    }
+
+    private func canonicalLanguageIdentifier(for language: Locale.Language) -> String {
+        canonicalLanguageIdentifier(SupportedLanguages.code(for: language))
+    }
+
+    private func canonicalLanguageIdentifier(_ identifier: String) -> String {
+        let normalized = identifier.replacingOccurrences(of: "_", with: "-").lowercased()
+        let parts = normalized.split(separator: "-").map(String.init)
+        guard let base = parts.first else { return normalized }
+
+        switch base {
+        case "zh":
+            if parts.contains("hant") { return "zh-hant" }
+            return "zh-hans"
+        case "pt":
+            return "pt-br"
+        default:
+            return base
         }
     }
 }

@@ -1,17 +1,13 @@
 package com.aljaroudi.lingko.ui.translation
 
-import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -21,20 +17,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aljaroudi.lingko.R
 import com.aljaroudi.lingko.domain.model.Language
-import com.aljaroudi.lingko.ui.components.EmptyState
 import com.aljaroudi.lingko.ui.components.ErrorState
 import com.aljaroudi.lingko.ui.components.ErrorSeverity
+import com.aljaroudi.lingko.ui.theme.LingkoTheme
+import com.aljaroudi.lingko.ui.translation.components.LanguageDropdown
 import com.aljaroudi.lingko.ui.translation.components.LanguageSelectionSheet
-import com.aljaroudi.lingko.ui.translation.components.SourceLanguageSelectionDialog
-import com.aljaroudi.lingko.ui.translation.components.TranslationResultCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,23 +45,19 @@ fun TranslationScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showLanguageSelection by remember { mutableStateOf(false) }
-    var showSourceLanguageSelection by remember { mutableStateOf(false) }
 
-    // Register the callback for extracted text
     LaunchedEffect(Unit) {
-        onTextExtractedCallback { text ->
-            viewModel.setText(text)
-        }
+        onTextExtractedCallback { text -> viewModel.setText(text) }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { 
+                title = {
                     Text(
                         stringResource(R.string.title_translation),
                         modifier = Modifier.semantics { heading() }
-                    ) 
+                    )
                 },
                 actions = {
                     IconButton(onClick = onNavigateToHistory) {
@@ -86,103 +81,29 @@ fun TranslationScreen(
                 .padding(padding)
                 .imePadding()
         ) {
-            // Source language selector
-            SourceLanguageChipRow(
-                availableLanguages = uiState.selectedTargetLanguages.sortedBy { it.displayName },
-                selectedLanguage = uiState.manualSourceLanguage,
-                onLanguageSelected = viewModel::setManualSourceLanguage,
-                onAutoSelected = viewModel::clearManualSourceLanguage,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            // Input field
-            TextField(
-                value = uiState.inputText,
-                onValueChange = viewModel::onTextChange,
-                modifier = Modifier
-                    .fillMaxWidth(),
-                placeholder = { Text(stringResource(R.string.placeholder_enter_text)) },
-                minLines = 3,
-                maxLines = 6
-            )
-
-            HorizontalDivider()
-
-            // Language selector (only show if languages are selected and text is not empty)
-            if (uiState.selectedTargetLanguages.isNotEmpty() && uiState.inputText.isNotBlank()) {
-                // Filter out source language from target languages
-                val targetLanguages = uiState.selectedTargetLanguages
-                    .filter { it != uiState.effectiveSourceLanguage }
-                    .sortedBy { it.displayName }
-
-                if (targetLanguages.isNotEmpty()) {
-                    LanguageChipRow(
-                        languages = targetLanguages,
-                        activeLanguage = uiState.activePriorityLanguage,
-                        onLanguageSelected = viewModel::setActivePriorityLanguage,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    HorizontalDivider()
-                }
+            // Error banner
+            if (uiState.error != null) {
+                ErrorState(
+                    title = stringResource(R.string.error_translation_failed),
+                    message = uiState.error!!,
+                    severity = ErrorSeverity.Error,
+                    onRetry = { viewModel.retryTranslation() },
+                    onDismiss = { viewModel.clearError() },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
-            // Translation results area with crossfade animation
-            Crossfade(
-                targetState = when {
-                    uiState.isTranslating -> TranslationState.Loading
-                    uiState.error != null -> TranslationState.Error
-                    uiState.activeTranslation != null -> TranslationState.Results
-                    else -> TranslationState.Empty
+            TwoPanelInputCard(
+                uiState = uiState,
+                onTextChange = viewModel::onTextChange,
+                onSourceSelected = { lang ->
+                    if (lang == null) viewModel.clearManualSourceLanguage()
+                    else viewModel.setManualSourceLanguage(lang)
                 },
-                label = "translation_state"
-            ) { state ->
-                when (state) {
-                    TranslationState.Loading -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator()
-                        }
-                    }
-                    TranslationState.Error -> {
-                        ErrorState(
-                            title = stringResource(R.string.error_translation_failed),
-                            message = uiState.error!!,
-                            severity = ErrorSeverity.Error,
-                            onRetry = { viewModel.retryTranslation() },
-                            onDismiss = { viewModel.clearError() },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                    TranslationState.Results -> {
-                        // Show only the active priority language's translation
-                        uiState.activeTranslation?.let { activeResult ->
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(vertical = 8.dp)
-                            ) {
-                                item {
-                                    TranslationResultCard(
-                                        result = activeResult,
-                                        showRomanization = true,
-                                        onSpeak = { viewModel.speak(activeResult) },
-                                        onCopy = { viewModel.copyToClipboard(activeResult) }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    TranslationState.Empty -> {
-                        EmptyState(
-                            icon = Icons.Default.Translate,
-                            title = stringResource(R.string.empty_translation_title),
-                            message = stringResource(R.string.empty_translation_message),
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
-            }
+                onTargetSelected = viewModel::onTargetLanguageSelected,
+                onSwap = viewModel::swap,
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 
@@ -193,111 +114,172 @@ fun TranslationScreen(
             onDismiss = { showLanguageSelection = false }
         )
     }
-    
-    if (showSourceLanguageSelection) {
-        SourceLanguageSelectionDialog(
-            currentSourceLanguage = uiState.effectiveSourceLanguage,
-            detectedLanguages = uiState.possibleSourceLanguages,
-            onLanguageSelected = viewModel::setManualSourceLanguage,
-            onDismiss = { showSourceLanguageSelection = false }
+}
+
+@Composable
+private fun TwoPanelInputCard(
+    uiState: TranslationUiState,
+    onTextChange: (String) -> Unit,
+    onSourceSelected: (Language?) -> Unit,
+    onTargetSelected: (Language) -> Unit,
+    onSwap: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val accent = MaterialTheme.colorScheme.tertiary
+    val sortedTargetOptions = uiState.selectedTargetLanguages
+        .filter { it != uiState.effectiveSourceLanguage }
+        .sortedBy { it.displayName }
+    val sortedSourceOptions: List<Language?> = listOf(null) +
+        uiState.selectedTargetLanguages
+            .filter { it != uiState.selectedTargetLanguage }
+            .sortedBy { it.displayName }
+
+    val sourceLabel = uiState.manualSourceLanguage?.displayName
+        ?: uiState.sourceLanguage?.language?.displayName
+        ?: stringResource(R.string.label_auto_detect)
+
+    val targetLabel = uiState.selectedTargetLanguage?.displayName
+        ?: stringResource(R.string.label_unknown_language)
+
+    Column(modifier = modifier.fillMaxSize()) {
+        // Source panel
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                LanguageDropdown(
+                    label = sourceLabel,
+                    options = sortedSourceOptions,
+                    selectedLanguage = uiState.manualSourceLanguage,
+                    onSelect = onSourceSelected,
+                    accent = false
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = stringResource(R.string.cd_voice_input),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            BasicTextField(
+                value = uiState.inputText,
+                onValueChange = onTextChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 80.dp, max = 200.dp),
+                textStyle = TextStyle(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = MaterialTheme.typography.bodyLarge.fontSize
+                ),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                decorationBox = { inner ->
+                    if (uiState.inputText.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.placeholder_enter_text),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                    }
+                    inner()
+                }
+            )
+        }
+
+        // Swap divider
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            HorizontalDivider()
+            FilledTonalIconButton(
+                onClick = onSwap,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SwapVert,
+                    contentDescription = stringResource(R.string.cd_swap_languages),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+
+        // Target panel
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (sortedTargetOptions.isNotEmpty()) {
+                    LanguageDropdown(
+                        label = targetLabel,
+                        options = sortedTargetOptions,
+                        selectedLanguage = uiState.selectedTargetLanguage,
+                        onSelect = { lang -> lang?.let { onTargetSelected(it) } },
+                        accent = true
+                    )
+                } else {
+                    Text(
+                        text = targetLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = accent,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = stringResource(R.string.cd_voice_input),
+                    tint = accent.copy(alpha = 0.4f),
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Box(modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp)) {
+                when {
+                    uiState.isTranslating -> CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    uiState.translation != null -> Text(
+                        text = uiState.translation.translation,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = accent
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun TranslationScreenPreview() {
+    LingkoTheme {
+        TwoPanelInputCard(
+            uiState = TranslationUiState(
+                inputText = "Hello, world!",
+                manualSourceLanguage = Language.ENGLISH,
+                selectedTargetLanguage = Language.RUSSIAN
+            ),
+            onTextChange = {},
+            onSourceSelected = {},
+            onTargetSelected = {},
+            onSwap = {}
         )
     }
-}
-
-@Composable
-private fun SourceLanguageChipRow(
-    availableLanguages: List<Language>,
-    selectedLanguage: Language?,
-    onLanguageSelected: (Language) -> Unit,
-    onAutoSelected: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    LazyRow(
-        modifier = modifier
-            .padding(vertical = 12.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        // Auto option
-        item(key = "auto") {
-            FilterChip(
-                selected = selectedLanguage == null,
-                onClick = onAutoSelected,
-                label = {
-                    Text(
-                        text = "Auto",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primary,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
-        }
-
-        // Language options
-        items(
-            count = availableLanguages.size,
-            key = { index -> availableLanguages[index].code }
-        ) { index ->
-            val language = availableLanguages[index]
-            val isActive = selectedLanguage == language
-            FilterChip(
-                selected = isActive,
-                onClick = { onLanguageSelected(language) },
-                label = {
-                    Text(
-                        text = language.displayName,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primary,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
-        }
-    }
-}
-
-@Composable
-private fun LanguageChipRow(
-    languages: List<Language>,
-    activeLanguage: Language?,
-    onLanguageSelected: (Language) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    LazyRow(
-        modifier = modifier
-            .padding(vertical = 12.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(
-            count = languages.size,
-            key = { index -> languages[index].code }
-        ) { index ->
-            val language = languages[index]
-            val isActive = activeLanguage == language
-            FilterChip(
-                selected = isActive,
-                onClick = { onLanguageSelected(language) },
-                label = {
-                    Text(
-                        text = language.displayName,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primary,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
-        }
-    }
-}
-
-private enum class TranslationState {
-    Loading, Error, Results, Empty
 }
