@@ -72,6 +72,7 @@ struct TranslationView: View {
     @State private var isCommittingAutosave = false
     @State private var latestTranslationRequestID = UUID()
     @State private var inputDismissedForCurrentRequest = true
+    @State private var inputDismissRequestID = UUID()
     @FocusState private var isInputFocused: Bool
 
     @State private var audioService = AudioService()
@@ -92,10 +93,6 @@ struct TranslationView: View {
     @AppStorage("autoSaveToHistory") private var autoSaveToHistory: Bool = true
 
     private let debounceDelay: Duration = .milliseconds(300)
-
-    private var sourceInputLanguage: Locale.Language? {
-        selectedSourceLanguage ?? currentSourceLanguage
-    }
 
     init(initialText: Binding<String>) {
         _inputText = initialText
@@ -364,7 +361,8 @@ struct TranslationView: View {
 #if os(iOS)
                     LanguageAwareTextEditor(
                         text: $inputText,
-                        inputLanguage: sourceInputLanguage,
+                        inputLanguage: selectedSourceLanguage,
+                        dismissRequestID: inputDismissRequestID,
                         isFocused: $isInputFocused
                     )
                     .frame(minHeight: 80, maxHeight: 200)
@@ -867,6 +865,7 @@ struct TranslationView: View {
 
     private func dismissInputFocus() {
         isInputFocused = false
+        inputDismissRequestID = UUID()
         inputDismissedForCurrentRequest = true
     }
 
@@ -1067,6 +1066,7 @@ struct TranslationView: View {
 private struct LanguageAwareTextEditor: UIViewRepresentable {
     @Binding var text: String
     let inputLanguage: Locale.Language?
+    let dismissRequestID: UUID
     let isFocused: FocusState<Bool>.Binding
 
     func makeUIView(context: Context) -> KeyboardLanguageTextView {
@@ -1090,10 +1090,13 @@ private struct LanguageAwareTextEditor: UIViewRepresentable {
 
         textView.preferredLanguageIdentifier = inputLanguage?.minimalIdentifier
 
-        if isFocused.wrappedValue, !textView.isFirstResponder {
+        if context.coordinator.lastDismissRequestID != dismissRequestID {
+            context.coordinator.lastDismissRequestID = dismissRequestID
+            if textView.isFirstResponder {
+                textView.resignFirstResponder()
+            }
+        } else if isFocused.wrappedValue, !textView.isFirstResponder {
             textView.becomeFirstResponder()
-        } else if !isFocused.wrappedValue, textView.isFirstResponder {
-            textView.resignFirstResponder()
         }
     }
 
@@ -1103,9 +1106,11 @@ private struct LanguageAwareTextEditor: UIViewRepresentable {
 
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: LanguageAwareTextEditor
+        var lastDismissRequestID: UUID
 
         init(parent: LanguageAwareTextEditor) {
             self.parent = parent
+            lastDismissRequestID = parent.dismissRequestID
         }
 
         func textViewDidChange(_ textView: UITextView) {
