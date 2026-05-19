@@ -4,6 +4,8 @@ A native iOS translation app leveraging on-device Translation SDKs for iOS and A
 
 More on [my portfolio](https://aljaroudi.com)
 
+[![Download on the App Store](https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg)](https://apps.apple.com/app/lingko/id6757619924)
+
 ## Features
 
 | Feature                         | Apple | Android |
