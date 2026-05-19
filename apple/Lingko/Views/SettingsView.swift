@@ -76,7 +76,8 @@ struct SettingsView: View {
                 // Accessibility & System Settings
                 Section {
                     Toggle(isOn: $reduceMotion) {
-                        Label("Reduce Motion", systemImage: "motion.reduce")
+                        Label("Reduce Motion", systemImage: "tortoise")
+                   
                     }
 
                     #if os(iOS)
@@ -105,25 +106,15 @@ struct SettingsView: View {
                 }
 
                 // App Information
-                Section {
-                    HStack {
-                        Text("Version")
-                        Spacer()
-                        Text(appVersion)
-                            .foregroundStyle(.secondary)
-                    }
+                Section("About") {
+                    LabeledContent("Version", value: appVersion)
 
                     Link(destination: URL(string: "https://github.com/aljaroudi/Lingko")!) {
-                        HStack {
-                            Label("GitHub Repository", systemImage: "link")
-                            Spacer()
-                            Image(systemName: "arrow.up.right")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        Label("Source Code", systemImage: "arrow.up.right")
                     }
-                } header: {
-                    Text("About")
+                    Link(destination: URL(string: "https://aljaroudi.com")!) {
+                        Label("Developer Website", systemImage: "arrow.up.right")
+                    }
                 }
 
                 // Privacy & Data
